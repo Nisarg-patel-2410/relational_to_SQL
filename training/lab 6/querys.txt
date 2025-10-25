@@ -1,0 +1,28 @@
+π Name (Foods)
+π Brand σ Price<100 (Foods)
+π TypeofFood (Likes)
+π LastName (Owners)
+π City (Pets)
+π FoodID,Name σ TypeofFood='dog food' (Foods)
+σ State='CA' (Owners)
+π Name,TypeofPet (Pets)
+π PetID,PetAgeatOwnership (Owns)
+σ Age>40 (Owners)
+--------------------------------------------------
+              DONE TILL THIS
+--------------------------------------------------
+
+
+-- σ Owns.PetID=Pets.PetID ((Owners⨝Owns) x (Pets)) 
+(Owners⨝Owns)
+
+π Pets.Name,Owners.LastName σ Owns.PetID=Pets.PetID ((Owners⨝Owns) x (Pets)) 
+σ Owns.PetID=Pets.PetID∧Owners.City=Pets.City ((Owners⨝Owns) x (Pets)) 
+π Foods.Name,Purchases.Month (Foods⨝Purchases)
+π Foods.Name σ Purchases.PetID=Pets.PetID∧Pets.TypeofPet='Cat' ((Foods⨝Purchases) ⨯ (Pets))
+π Pets.Name σ Pets.PetID=Likes.PetID ((Pets) x (Likes⨝Purchases⨝Foods))
+π Owners.LastName σ Purchases.Year=2024 (Owners⨝Purchases)
+
+-- π Name ((Pets)-π Pets.PetID,Pets.Name,Pets.Age,Pets.Street,Pets.City,Pets.ZipCode,Pets.State,Pets.TypeofPet (Pets⨝Purchases)) 
+
+π Pets.Name σ Purchases.FoodID=null (Pets⟗Purchases)

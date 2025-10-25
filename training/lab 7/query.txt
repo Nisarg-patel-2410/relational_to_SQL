@@ -1,0 +1,18 @@
+ρ F.Name→FName,F.Price→Fprice (ρ F (π Name, Price (Foods)))
+ρ Customer (Owners)
+π P1.Name,P2.Name σ P1.City=P2.City∧P1.Name≠P2.Name (ρ P1 (Pets) x ρ P2 (π City,Name (Pets)))
+ρ PetID→Pet_ID,OID→Owner_ID,Year→Purchase_Year,PetAgeatOwnership→Pet_Age,PricePaid→Cost (ρ OwnershipDetails (Owns))
+π OID,FoodID,Quantity (ρ Transactions (Purchases))
+
+π OID ((π OID,FoodID (Purchases)) ÷ (π FoodID (Foods)))
+(π Owners.OID,Owners.City (π OID,City (Owners)⨝Owns⨝π PetID (Pets))) ÷ (π City (Pets))
+(π PetID,TypeofFood (Likes)) ÷ (π TypeofFood σ PetID=10 (Likes))
+(π Purchases.OID,Foods.Brand (Foods⨝Purchases)) ÷ (π Brand (Foods))
+(π PetID,OID (Owns)) ÷ (π OID σ City='New York' (Owners))
+
+
+(ρ F1 (Foods)) ÷ (π TypeofFood σ Brand='Pedigree' (ρ F2 (Foods)))
+(ρ P1 (Purchases)) ÷ (π FoodID σ PetID=20 (ρ P2 (Purchases)))
+(ρ L1 (Likes)) ÷ (π TypeofFood (ρ L2 (Likes)))
+(ρ O1 (Owns)) ÷ (π PetID σ OID=5 (ρ O2 (Owns)))
+(ρ P1 (Pets)) ÷ (π City (ρ P2 (Pets)))
