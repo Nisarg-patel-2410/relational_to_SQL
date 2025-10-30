@@ -1,3 +1,5 @@
+# by : Nisarg kanasagra
+
 '''
 NOTE Only for the Simple like "π Brand σ Price<100 (Foods)"
 TODO make it object based so abdulla and lukka can also do some thing
