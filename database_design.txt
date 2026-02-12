@@ -1,0 +1,7 @@
+Department
+ ├── Professors (HOD is one of them)
+ ├── Students
+ │    └── Mentor (student → student)
+ ├── Subjects
+ │    └── Results (student + subject)
+Dean (top level)

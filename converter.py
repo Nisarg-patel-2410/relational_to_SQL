@@ -6,15 +6,16 @@ NOTE Only for the Simple like "π Brand σ Price<100 (Foods)" like only for the 
 TODO make it object based so abdulla and lukka can also do some thing
 TODO make it comteble with SQL:
     - For that I Need to learn the SQLAlcamy or SQLlite
+TODO Make it stack based  for more larger aplication
 '''
 
 
 
 
 def term_maker(op : str):
-    '''make the term and append the oparator and oprant in respective stacks'''
     # use of globle key word for allowing the change in globle variable
     global temp
+    '''make the term and append the oparator and oprant in respective stacks'''
     # TODO needed to modify for the binary oparator
     # NOTE done for unary oparator
     oprators.append(op)
@@ -22,9 +23,9 @@ def term_maker(op : str):
     temp = ""
 
 def stack_filler():
-    '''fill the stack through out the query'''
     # use of globle key word for allowing the change in globle variable
     global temp
+    '''fill the stack through out the query'''
 
     for char in q:
         if char == ")":
@@ -45,7 +46,7 @@ def proccessor():
     # use of globle key word for allowing the change in globle variable
     global oparants      
     global oprators
-    global pi,table,sigma
+    global pi,table,sigma      
     while len(oprators):
         ot = oprators.pop()
         on = oparants.pop()
@@ -64,10 +65,7 @@ def proccessor():
                 
         # for σ - where oparator
         elif ot == "σ":
-            if sigma != "":
-                sigma = on + " AND " + sigma
-            else:
-                sigma = on
+            sigma = on
             
         else:
             raise ValueError
@@ -95,7 +93,6 @@ if __name__ == "__main__":
 
     # print(q)
 
-    # reversing the query for easy proccessing
     q = q[::-1]
 
     # Supported Oparations 
