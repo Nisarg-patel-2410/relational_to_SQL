@@ -10,6 +10,7 @@ class TokenType(Enum):
     """Token types for relational algebra query"""
     PROJECT = "π"
     SELECT = "σ"
+    CROSSJOIN = "×"
     LPAREN = "("
     RPAREN = ")"
     IDENTIFIER = "IDENTIFIER"
@@ -29,7 +30,7 @@ class Token:
 
 class Tokenizer:
     """Tokenizes relational algebra queries into tokens"""
-    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT}
+    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN}
 
     def __init__(self, query: str):
         self.query = query.strip()
@@ -66,7 +67,7 @@ class Tokenizer:
     def _read_token(self) -> str:
         """Read a complete token (identifier or condition)"""
         start = self.pos
-        while self.pos < len(self.query) and self.query[self.pos] not in "()πσ":
+        while self.pos < len(self.query) and self.query[self.pos] not in "()πσ×":
             self.pos += 1
         return self.query[start:self.pos].strip()
 
@@ -119,6 +120,20 @@ class SelectionNode(ExpressionNode):
         return result
 
 
+class CrossJoinNode(ExpressionNode):
+    """Represents × (cross join/Cartesian product) operation"""
+    def __init__(self, left: ExpressionNode, right: ExpressionNode):
+        self.left = left
+        self.right = right
+    
+    def display(self, indent: int = 0) -> str:
+        """Display the cross join node"""
+        result = f"{'  ' * indent}├─ × (Cross Join)\n"
+        result += self.left.display(indent + 1)
+        result += self.right.display(indent + 1)
+        return result
+
+
 class ExpressionTreeBuilder:
     """Builds an expression tree from tokens"""
     def __init__(self, tokens: List[Token]):
@@ -127,68 +142,70 @@ class ExpressionTreeBuilder:
 
     def build(self) -> ExpressionNode:
         """Build the expression tree from tokens"""
-        return self._parse_expression()
+        return self._parse_crossjoin()
+
+    def _parse_crossjoin(self) -> ExpressionNode:
+        """Parse cross join operations (lowest precedence)"""
+        left = self._parse_unary()
+        
+        while self._current_token().type == TokenType.CROSSJOIN:
+            self.pos += 1
+            right = self._parse_unary()
+            left = CrossJoinNode(left, right)
+        
+        return left
+
+    def _parse_unary(self) -> ExpressionNode:
+        """Parse unary operations (higher precedence than cross join)"""
+        operations = []
+        
+        # Collect all unary operations
+        while self._current_token().type in (TokenType.PROJECT, TokenType.SELECT):
+            token = self._current_token()
+            self.pos += 1
+            
+            if token.type == TokenType.PROJECT:
+                columns = self._read_columns()
+                operations.append(('project', columns))
+            elif token.type == TokenType.SELECT:
+                condition = self._read_condition()
+                operations.append(('select', condition))
+        
+        # Parse the primary expression
+        node = self._parse_primary()
+        
+        # Apply unary operations in reverse order (from innermost to outermost)
+        for op_type, op_value in reversed(operations):
+            if op_type == 'project':
+                node = ProjectionNode(op_value, node)
+            elif op_type == 'select':
+                node = SelectionNode(op_value, node)
+        
+        return node
+
+    def _parse_primary(self) -> Optional[ExpressionNode]:
+        """Parse primary expressions (tables and parenthesized expressions)"""
+        token = self._current_token()
+
+        if token.type == TokenType.LPAREN:
+            self.pos += 1
+            node = self._parse_crossjoin()  # Parse full expression inside parens
+            if self._current_token().type == TokenType.RPAREN:
+                self.pos += 1
+            return node
+
+        elif token.type == TokenType.IDENTIFIER:
+            node = TableNode(token.value)
+            self.pos += 1
+            return node
+
+        return None
 
     def _current_token(self) -> Token:
         """Get current token"""
         if self.pos < len(self.tokens):
             return self.tokens[self.pos]
         return Token(TokenType.EOF, "")
-
-    def _parse_expression(self) -> Optional[ExpressionNode]:
-        """Parse operations and their operands"""
-        node = None
-
-        while self.pos < len(self.tokens):
-            token = self._current_token()
-
-            if token.type == TokenType.EOF:
-                break
-
-            elif token.type == TokenType.PROJECT:
-                self.pos += 1
-                columns = self._read_columns()
-                # print(columns)
-                node = ProjectionNode(columns, node)
-
-            elif token.type == TokenType.SELECT:
-                self.pos += 1
-                condition = self._read_condition()
-                node = SelectionNode(condition, node)
-
-            elif token.type == TokenType.LPAREN:
-                self.pos += 1
-                inner_node = self._parse_expression()
-                
-                # Attach the inner node to the current tree
-                if node is None:
-                    node = inner_node
-                else:
-                    self._set_leaf_child(node, inner_node)
-                
-                if self._current_token().type == TokenType.RPAREN:
-                    self.pos += 1
-
-            elif token.type == TokenType.IDENTIFIER:
-                node = TableNode(token.value)
-                self.pos += 1
-
-            elif token.type == TokenType.RPAREN:
-                break
-
-            else:
-                self.pos += 1
-
-        return node
-    
-    def _set_leaf_child(self, node: ExpressionNode, child: ExpressionNode):
-        """Find the leaf node (one with child=None) and set its child"""
-        if isinstance(node, TableNode):
-            return
-        if node.child is None:
-            node.child = child
-        else:
-            self._set_leaf_child(node.child, child)
 
     def _read_columns(self) -> List[str]:
         """Read projection columns"""
@@ -213,7 +230,7 @@ class SQLConverter:
     def __init__(self, tree: Optional[ExpressionNode]):
         self.tree = tree
         self.columns = ["*"]
-        self.table = ""
+        self.tables = []
         self.condition = ""
 
     def convert(self) -> str:
@@ -225,7 +242,7 @@ class SQLConverter:
     def _traverse(self, node: ExpressionNode):
         """Traverse the tree and extract SQL components"""
         if isinstance(node, TableNode):
-            self.table = node.name
+            self.tables.append(node.name)
 
         elif isinstance(node, ProjectionNode):
             self.columns = node.columns
@@ -237,13 +254,18 @@ class SQLConverter:
             if node.child:
                 self._traverse(node.child)
 
+        elif isinstance(node, CrossJoinNode):
+            self._traverse(node.left)
+            self._traverse(node.right)
+
     def _build_sql(self) -> str:
         """Build SQL query from extracted components"""
-        if not self.table:
+        if not self.tables:
             raise ValueError("No table specified in query")
 
         columns_str = ", ".join(self.columns) if self.columns else "*"
-        sql = f"SELECT {columns_str} FROM {self.table}"
+        tables_str = ", ".join(self.tables)
+        sql = f"SELECT {columns_str} FROM {tables_str}"
 
         if self.condition:
             sql += f" WHERE {self.condition}"
