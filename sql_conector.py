@@ -21,5 +21,6 @@ def execute(query: str, params=(), database_name="database.db"):
 
 
 # Example usage
-rows = execute("SELECT dept_name FROM department")
-print(rows)
+if __name__ == "__main__":
+    rows = execute("SELECT dept_name FROM department")
+    print(rows)
