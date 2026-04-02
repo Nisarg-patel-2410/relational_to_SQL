@@ -31,7 +31,7 @@ class Token:
 
 class Tokenizer:
     """Tokenizes relational algebra queries into tokens"""
-    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN, "⋈": TokenType.NATURALJOIN}
+    OPERATORS = {"π": TokenType.PROJECT, "?": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN, "⋈": TokenType.NATURALJOIN}
 
     def __init__(self, query: str):
         self.query = query.strip()
