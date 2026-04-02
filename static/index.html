@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relational Algebra Explorer</title>
+  <meta name="description" content="Convert relational algebra expressions (π, σ, ×, ⋈) to SQL and execute them instantly." />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="app-bar">
+    <div class="app-bar-inner">
+      <div class="logo">
+        <span class="logo-icon">∑</span>
+        <div>
+          <h1>Relational Algebra Explorer</h1>
+          <p class="tagline">π σ × ⋈ → SQL, instantly</p>
+        </div>
+      </div>
+      <div id="db-badge" class="db-badge hidden">
+        <span class="db-dot"></span>
+        <span id="db-badge-text">Connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main layout ── -->
+  <main class="container">
+
+    <!-- Sidebar: examples + symbol palette + tables -->
+    <aside class="sidebar">
+
+      <div class="card examples-card">
+        <h2 class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+          Examples
+        </h2>
+        <ul id="examples" class="examples-list">
+          <li data-query="π name, email (professor)"><span class="chip">π</span> Project columns</li>
+          <li data-query="σ gender='Female' (students)"><span class="chip">σ</span> Filter rows</li>
+          <li data-query="(students ⋈ department)"><span class="chip">⋈</span> Natural join</li>
+          <li data-query="π student_id,subject_name (students × subject)"><span class="chip">×</span> Cross join + project</li>
+          <li data-query="σ grade='A' (result)"><span class="chip">σ</span> Grade filter</li>
+          <li data-query="(mentor × students)"><span class="chip">×</span> Mentor × students</li>
+        </ul>
+      </div>
+
+      <div class="card symbols-card">
+        <h2 class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          Symbols
+        </h2>
+        <div class="symbol-grid">
+          <button class="sym-btn" data-sym="π" title="Projection">π</button>
+          <button class="sym-btn" data-sym="σ" title="Selection">σ</button>
+          <button class="sym-btn" data-sym="×" title="Cross Join">×</button>
+          <button class="sym-btn" data-sym="⋈" title="Natural Join">⋈</button>
+          <button class="sym-btn" data-sym="∪" title="Union">∪</button>
+          <button class="sym-btn" data-sym="∩" title="Intersection">∩</button>
+          <button class="sym-btn" data-sym="−" title="Difference">−</button>
+          <button class="sym-btn" data-sym="ρ" title="Rename">ρ</button>
+        </div>
+      </div>
+
+      <div class="card tables-card">
+        <h2 class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          Database Tables
+        </h2>
+        <ul id="tables-list" class="tables-list"><li class="loading-text">Loading…</li></ul>
+      </div>
+
+    </aside>
+
+    <!-- Editor + Results -->
+    <div class="main-panel">
+
+      <section class="card editor-card">
+        <h2 class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Expression Editor
+        </h2>
+        <form id="ra-form">
+          <div class="textarea-wrap">
+            <textarea
+              id="ra-query"
+              placeholder="Type a relational algebra expression…&#10;e.g.  π name, email (professor)"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+              required
+            ></textarea>
+          </div>
+
+          <div class="controls">
+            <button type="submit" id="run-btn" class="btn-primary">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run Query
+            </button>
+            <button type="button" id="clear-btn" class="btn-ghost">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              Clear
+            </button>
+            <span id="loading" class="loading-indicator hidden">
+              <span class="spinner"></span> Running…
+            </span>
+          </div>
+
+          <div id="error" class="error-banner hidden">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            <span id="error-text"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- Results -->
+      <section id="result" class="results-section hidden">
+
+        <div class="card sql-card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+              Generated SQL
+            </h2>
+            <button id="copy-sql-btn" class="btn-icon" title="Copy SQL">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+          </div>
+          <pre id="sql-output" class="sql-pre"></pre>
+        </div>
+
+        <div class="card rows-card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+              Query Results
+            </h2>
+            <span id="row-count" class="row-count-badge"></span>
+          </div>
+          <div id="rows-output" class="table-wrap">
+            <table id="rows-table"></table>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden">Copied!</div>
+
+  <script src="script.js"></script>
+</body>
+</html>

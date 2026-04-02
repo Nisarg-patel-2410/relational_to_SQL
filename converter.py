@@ -11,6 +11,7 @@ class TokenType(Enum):
     PROJECT = "π"
     SELECT = "σ"
     CROSSJOIN = "×"
+    NATURALJOIN = "⋈"
     LPAREN = "("
     RPAREN = ")"
     IDENTIFIER = "IDENTIFIER"
@@ -30,7 +31,7 @@ class Token:
 
 class Tokenizer:
     """Tokenizes relational algebra queries into tokens"""
-    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN}
+    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN, "⋈": TokenType.NATURALJOIN}
 
     def __init__(self, query: str):
         self.query = query.strip()
@@ -67,7 +68,7 @@ class Tokenizer:
     def _read_token(self) -> str:
         """Read a complete token (identifier or condition)"""
         start = self.pos
-        while self.pos < len(self.query) and self.query[self.pos] not in "()πσ×":
+        while self.pos < len(self.query) and self.query[self.pos] not in "()πσ×⋈":
             self.pos += 1
         return self.query[start:self.pos].strip()
 
@@ -134,6 +135,19 @@ class CrossJoinNode(ExpressionNode):
         return result
 
 
+class NaturalJoinNode(ExpressionNode):
+    """Represents ⋈ (natural join) operation"""
+    def __init__(self, left: ExpressionNode, right: ExpressionNode):
+        self.left = left
+        self.right = right
+
+    def display(self, indent: int = 0) -> str:
+        result = f"{'  ' * indent}├─ ⋈ (Natural Join)\n"
+        result += self.left.display(indent + 1)
+        result += self.right.display(indent + 1)
+        return result
+
+
 class ExpressionTreeBuilder:
     """Builds an expression tree from tokens"""
     def __init__(self, tokens: List[Token]):
@@ -145,14 +159,18 @@ class ExpressionTreeBuilder:
         return self._parse_crossjoin()
 
     def _parse_crossjoin(self) -> ExpressionNode:
-        """Parse cross join operations (lowest precedence)"""
+        """Parse cross/natural join operations (lowest precedence)"""
         left = self._parse_unary()
-        
-        while self._current_token().type == TokenType.CROSSJOIN:
+
+        while self._current_token().type in (TokenType.CROSSJOIN, TokenType.NATURALJOIN):
+            tok = self._current_token()
             self.pos += 1
             right = self._parse_unary()
-            left = CrossJoinNode(left, right)
-        
+            if tok.type == TokenType.CROSSJOIN:
+                left = CrossJoinNode(left, right)
+            else:
+                left = NaturalJoinNode(left, right)
+
         return left
 
     def _parse_unary(self) -> ExpressionNode:
@@ -232,6 +250,7 @@ class SQLConverter:
         self.columns = ["*"]
         self.tables = []
         self.condition = ""
+        self.natural_joins: list = []  # list of (left_node, right_node) tuples
 
     def convert(self) -> str:
         """Convert expression tree to SQL query"""
@@ -258,14 +277,32 @@ class SQLConverter:
             self._traverse(node.left)
             self._traverse(node.right)
 
+        elif isinstance(node, NaturalJoinNode):
+            self.natural_joins.append((node.left, node.right))
+            self._traverse(node.left)
+            self._traverse(node.right)
+
     def _build_sql(self) -> str:
         """Build SQL query from extracted components"""
         if not self.tables:
             raise ValueError("No table specified in query")
 
         columns_str = ", ".join(self.columns) if self.columns else "*"
-        tables_str = ", ".join(self.tables)
-        sql = f"SELECT {columns_str} FROM {tables_str}"
+
+        # If there are natural joins, build JOIN … NATURAL JOIN … syntax
+        if self.natural_joins:
+            # Collect table names in order via a fresh traversal
+            table_names = self.tables
+            if len(table_names) >= 2:
+                from_clause = table_names[0]
+                for tbl in table_names[1:]:
+                    from_clause += f" NATURAL JOIN {tbl}"
+            else:
+                from_clause = table_names[0]
+            sql = f"SELECT {columns_str} FROM {from_clause}"
+        else:
+            tables_str = ", ".join(self.tables)
+            sql = f"SELECT {columns_str} FROM {tables_str}"
 
         if self.condition:
             sql += f" WHERE {self.condition}"
