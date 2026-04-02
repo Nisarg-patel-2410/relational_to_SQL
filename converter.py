@@ -1,5 +1,5 @@
 # Object-oriented version with tokenizer, expression tree, and SQL converter
-# by: Nisarg Kanasagra
+# by: Nisarg Kanasagra, abdulla bohra, santhosh koshik lukka, and nikhil lodhi
 # Improved OOP functionality for better maintainability and extensibility
 
 from enum import Enum
@@ -11,6 +11,7 @@ class TokenType(Enum):
     PROJECT = "π"
     SELECT = "σ"
     CROSSJOIN = "×"
+    NATURALJOIN = "⋈"
     LPAREN = "("
     RPAREN = ")"
     IDENTIFIER = "IDENTIFIER"
@@ -30,7 +31,7 @@ class Token:
 
 class Tokenizer:
     """Tokenizes relational algebra queries into tokens"""
-    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN}
+    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN, "⋈": TokenType.NATURALJOIN}
 
     def __init__(self, query: str):
         self.query = query.strip()
@@ -67,7 +68,7 @@ class Tokenizer:
     def _read_token(self) -> str:
         """Read a complete token (identifier or condition)"""
         start = self.pos
-        while self.pos < len(self.query) and self.query[self.pos] not in "()πσ×":
+        while self.pos < len(self.query) and self.query[self.pos] not in "()" and self.query[self.pos] not in self.OPERATORS:
             self.pos += 1
         return self.query[start:self.pos].strip()
 
@@ -134,6 +135,19 @@ class CrossJoinNode(ExpressionNode):
         return result
 
 
+class NaturalJoinNode(ExpressionNode):
+    """Represents ⋈ (natural join) operation"""
+    def __init__(self, left: ExpressionNode, right: ExpressionNode):
+        self.left = left
+        self.right = right
+
+    def display(self, indent: int = 0) -> str:
+        result = f"{'  ' * indent}├─ ⋈ (Natural Join)\n"
+        result += self.left.display(indent + 1)
+        result += self.right.display(indent + 1)
+        return result
+
+
 class ExpressionTreeBuilder:
     """Builds an expression tree from tokens"""
     def __init__(self, tokens: List[Token]):
@@ -148,10 +162,14 @@ class ExpressionTreeBuilder:
         """Parse cross join operations (lowest precedence)"""
         left = self._parse_unary()
         
-        while self._current_token().type == TokenType.CROSSJOIN:
+        while self._current_token().type in (TokenType.CROSSJOIN, TokenType.NATURALJOIN):
+            token = self._current_token()
             self.pos += 1
             right = self._parse_unary()
-            left = CrossJoinNode(left, right)
+            if token.type == TokenType.CROSSJOIN:
+                left = CrossJoinNode(left, right)
+            else:
+                left = NaturalJoinNode(left, right)
         
         return left
 
@@ -233,11 +251,37 @@ class SQLConverter:
         self.tables = []
         self.condition = ""
 
+    def _build_from(self, node: Optional[ExpressionNode]) -> str:
+        """Recursively build the FROM expression including joins"""
+        if node is None:
+            return ""
+
+        if isinstance(node, TableNode):
+            return node.name
+
+        if isinstance(node, ProjectionNode) or isinstance(node, SelectionNode):
+            if node.child:
+                return self._build_from(node.child)
+            return ""
+
+        if isinstance(node, CrossJoinNode):
+            left = self._build_from(node.left)
+            right = self._build_from(node.right)
+            return f"({left} CROSS JOIN {right})"
+
+        if isinstance(node, NaturalJoinNode):
+            left = self._build_from(node.left)
+            right = self._build_from(node.right)
+            return f"({left} NATURAL JOIN {right})"
+
+        return ""
+
     def convert(self) -> str:
         """Convert expression tree to SQL query"""
         if self.tree:
             self._traverse(self.tree)
-        return self._build_sql()
+        from_expr = self._build_from(self.tree)
+        return self._build_sql(from_expr)
 
     def _traverse(self, node: ExpressionNode):
         """Traverse the tree and extract SQL components"""
@@ -257,15 +301,18 @@ class SQLConverter:
         elif isinstance(node, CrossJoinNode):
             self._traverse(node.left)
             self._traverse(node.right)
+        
+        elif isinstance(node, NaturalJoinNode):
+            self._traverse(node.left)
+            self._traverse(node.right)
 
-    def _build_sql(self) -> str:
-        """Build SQL query from extracted components"""
-        if not self.tables:
+    def _build_sql(self, from_expr: str) -> str:
+        """Build SQL query from extracted components and FROM expression"""
+        if not from_expr:
             raise ValueError("No table specified in query")
 
         columns_str = ", ".join(self.columns) if self.columns else "*"
-        tables_str = ", ".join(self.tables)
-        sql = f"SELECT {columns_str} FROM {tables_str}"
+        sql = f"SELECT {columns_str} FROM {from_expr}"
 
         if self.condition:
             sql += f" WHERE {self.condition}"
@@ -295,17 +342,45 @@ class QueryProcessor:
         print(f"✓ Expression Tree:\n{self.tree.display()}\n")
 
         # Step 3: Convert to SQL
-        converter = SQLConverter(self.tree)
+        converter = SQLConverter(self.tree) 
         self.sql = converter.convert()
         return self.sql
 
 
+
+
+def query_database(ra_query: str, database_name: str = "database.db") -> tuple[str, list]:
+    """Convert a relational algebra expression to SQL, execute it, and return
+    the generated SQL and result rows.
+
+    This is the backend entrypoint for both CLI and web front ends.
+    """
+    # convert the expression
+    processor = QueryProcessor(ra_query)
+    sql = processor.process()
+    # lazy-import to avoid circular imports during module load
+    from sql_conector import execute
+    import sqlite3
+    try:
+        rows = execute(sql, database_name=database_name)
+    except sqlite3.OperationalError as err:
+        # propagate with clearer message for front ends
+        raise ValueError(f"database error: {err}")
+    return sql, rows
+
+
 if __name__ == "__main__":
+    # simple command-line prompt if the module is executed directly
     try:
         query = input("Enter the query (e.g., π Brand σ Price<100 (Foods))\n> ")
-        processor = QueryProcessor(query)
-        result = processor.process()
-        print(f"✓ SQL Query: {result}")
+        sql, rows = query_database(query)
+        print(f"✓ SQL Query: {sql}")
+        if rows:
+            print("✓ Result rows:")
+            for r in rows:
+                print(r)
+        else:
+            print("✓ Query executed (no rows returned or non-SELECT)")
     except ValueError as e:
         print(f"✗ Error: {e}")
     except Exception as e:
