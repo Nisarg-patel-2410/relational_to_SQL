@@ -3,20 +3,24 @@
 # Improved OOP functionality for better maintainability and extensibility
 
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional
 
 
 class TokenType(Enum):
     """Token types for relational algebra query"""
-    PROJECT = "π"
-    SELECT = "σ"
-    CROSSJOIN = "×"
+    PROJECT    = "π"
+    SELECT     = "σ"
+    CROSSJOIN  = "×"
     NATURALJOIN = "⋈"
-    LPAREN = "("
-    RPAREN = ")"
+    UNION      = "∪"
+    INTERSECT  = "∩"
+    MINUS      = "−"
+    RENAME     = "ρ"
+    LPAREN     = "("
+    RPAREN     = ")"
     IDENTIFIER = "IDENTIFIER"
-    CONDITION = "CONDITION"
-    EOF = "EOF"
+    CONDITION  = "CONDITION"
+    EOF        = "EOF"
 
 
 class Token:
@@ -31,7 +35,17 @@ class Token:
 
 class Tokenizer:
     """Tokenizes relational algebra queries into tokens"""
-    OPERATORS = {"π": TokenType.PROJECT, "σ": TokenType.SELECT, "×": TokenType.CROSSJOIN}
+    OPERATORS = {
+        "π": TokenType.PROJECT,
+        "σ": TokenType.SELECT,
+        "×": TokenType.CROSSJOIN,
+        "⋈": TokenType.NATURALJOIN,
+        "∪": TokenType.UNION,
+        "∩": TokenType.INTERSECT,
+        "−": TokenType.MINUS,
+        "-": TokenType.MINUS,  # support regular hyphen for minus
+        "ρ": TokenType.RENAME,
+    }
 
     def __init__(self, query: str):
         self.query = query.strip()
@@ -55,7 +69,6 @@ class Tokenizer:
             elif char.isspace():
                 self.pos += 1
             else:
-                # Read identifier or condition
                 token_value = self._read_token()
                 if any(op in token_value for op in "<>=!"):
                     self.tokens.append(Token(TokenType.CONDITION, token_value))
@@ -68,39 +81,36 @@ class Tokenizer:
     def _read_token(self) -> str:
         """Read a complete token (identifier or condition)"""
         start = self.pos
-        while self.pos < len(self.query) and self.query[self.pos] not in "()πσ×":
+        while self.pos < len(self.query) and self.query[self.pos] not in "()πσ×⋈∪∩−-ρ":
             self.pos += 1
         return self.query[start:self.pos].strip()
 
+
+# ── AST Nodes ────────────────────────────────────────────────────────────────
 
 class ExpressionNode:
     """Base class for expression tree nodes"""
     def __repr__(self):
         return self.display()
-    
+
     def display(self, indent: int = 0) -> str:
-        """Display the expression tree in a readable format"""
         raise NotImplementedError("Subclasses must implement display()")
 
 
 class TableNode(ExpressionNode):
-    """Represents a table in the query"""
     def __init__(self, name: str):
         self.name = name
-    
+
     def display(self, indent: int = 0) -> str:
-        """Display the table node"""
         return f"{'  ' * indent}└─ Table: {self.name}"
 
 
 class ProjectionNode(ExpressionNode):
-    """Represents π (projection/SELECT columns) operation"""
     def __init__(self, columns: List[str], child: Optional[ExpressionNode] = None):
         self.columns = columns
         self.child = child
-    
+
     def display(self, indent: int = 0) -> str:
-        """Display the projection node"""
         result = f"{'  ' * indent}├─ π (Project): {', '.join(self.columns)}\n"
         if self.child:
             result += self.child.display(indent + 1)
@@ -108,13 +118,11 @@ class ProjectionNode(ExpressionNode):
 
 
 class SelectionNode(ExpressionNode):
-    """Represents σ (selection/WHERE clause) operation"""
     def __init__(self, condition: str, child: Optional[ExpressionNode] = None):
         self.condition = condition
         self.child = child
-    
+
     def display(self, indent: int = 0) -> str:
-        """Display the selection node"""
         result = f"{'  ' * indent}├─ σ (Select): {self.condition}\n"
         if self.child:
             result += self.child.display(indent + 1)
@@ -122,13 +130,11 @@ class SelectionNode(ExpressionNode):
 
 
 class CrossJoinNode(ExpressionNode):
-    """Represents × (cross join/Cartesian product) operation"""
     def __init__(self, left: ExpressionNode, right: ExpressionNode):
         self.left = left
         self.right = right
-    
+
     def display(self, indent: int = 0) -> str:
-        """Display the cross join node"""
         result = f"{'  ' * indent}├─ × (Cross Join)\n"
         result += self.left.display(indent + 1)
         result += self.right.display(indent + 1)
@@ -136,7 +142,6 @@ class CrossJoinNode(ExpressionNode):
 
 
 class NaturalJoinNode(ExpressionNode):
-    """Represents ⋈ (natural join) operation"""
     def __init__(self, left: ExpressionNode, right: ExpressionNode):
         self.left = left
         self.right = right
@@ -148,6 +153,55 @@ class NaturalJoinNode(ExpressionNode):
         return result
 
 
+class UnionNode(ExpressionNode):
+    def __init__(self, left: ExpressionNode, right: ExpressionNode):
+        self.left = left
+        self.right = right
+
+    def display(self, indent: int = 0) -> str:
+        result = f"{'  ' * indent}├─ ∪ (Union)\n"
+        result += self.left.display(indent + 1)
+        result += self.right.display(indent + 1)
+        return result
+
+class IntersectNode(ExpressionNode):
+    def __init__(self, left: ExpressionNode, right: ExpressionNode):
+        self.left = left
+        self.right = right
+
+    def display(self, indent: int = 0) -> str:
+        result = f"{'  ' * indent}├─ ∩ (Intersect)\n"
+        result += self.left.display(indent + 1)
+        result += self.right.display(indent + 1)
+        return result
+
+
+class MinusNode(ExpressionNode):
+    def __init__(self, left: ExpressionNode, right: ExpressionNode):
+        self.left = left
+        self.right = right
+
+    def display(self, indent: int = 0) -> str:
+        result = f"{'  ' * indent}├─ − (Minus/Except)\n"
+        result += self.left.display(indent + 1)
+        result += self.right.display(indent + 1)
+        return result
+
+
+class RenameNode(ExpressionNode):
+    def __init__(self, new_name: str, child: Optional[ExpressionNode] = None):
+        self.new_name = new_name
+        self.child = child
+
+    def display(self, indent: int = 0) -> str:
+        result = f"{'  ' * indent}├─ ρ (Rename): {self.new_name}\n"
+        if self.child:
+            result += self.child.display(indent + 1)
+        return result
+
+
+# ── Parser ───────────────────────────────────────────────────────────────────
+
 class ExpressionTreeBuilder:
     """Builds an expression tree from tokens"""
     def __init__(self, tokens: List[Token]):
@@ -155,55 +209,73 @@ class ExpressionTreeBuilder:
         self.pos = 0
 
     def build(self) -> ExpressionNode:
-        """Build the expression tree from tokens"""
-        return self._parse_crossjoin()
+        return self._parse_set_op()
 
-    def _parse_crossjoin(self) -> ExpressionNode:
-        """Parse cross/natural join operations (lowest precedence)"""
+    def _parse_set_op(self) -> ExpressionNode:
+        """Parse union/intersect/minus operations (lowest precedence)"""
+        left = self._parse_join()
+
+        while self._current_token().type in (TokenType.UNION, TokenType.INTERSECT, TokenType.MINUS):
+            tok = self._current_token()
+            self.pos += 1
+            right = self._parse_join()
+            if tok.type == TokenType.UNION:
+                left = UnionNode(left, right)
+            elif tok.type == TokenType.INTERSECT:
+                left = IntersectNode(left, right)
+            elif tok.type == TokenType.MINUS:
+                left = MinusNode(left, right)
+
+        return left
+
+    def _parse_join(self) -> ExpressionNode:
+        """Parse cross / natural join operations"""
         left = self._parse_unary()
-        
-        while self._current_token().type == TokenType.CROSSJOIN:
+
+        while self._current_token().type in (TokenType.CROSSJOIN, TokenType.NATURALJOIN):
+            tok = self._current_token()
             self.pos += 1
             right = self._parse_unary()
-            left = CrossJoinNode(left, right)
-        
+            if tok.type == TokenType.CROSSJOIN:
+                left = CrossJoinNode(left, right)
+            else:
+                left = NaturalJoinNode(left, right)
+
         return left
 
     def _parse_unary(self) -> ExpressionNode:
-        """Parse unary operations (higher precedence than cross join)"""
+        """Parse unary operations (higher precedence than joins)"""
         operations = []
-        
-        # Collect all unary operations
-        while self._current_token().type in (TokenType.PROJECT, TokenType.SELECT):
+
+        while self._current_token().type in (TokenType.PROJECT, TokenType.SELECT, TokenType.RENAME):
             token = self._current_token()
             self.pos += 1
-            
             if token.type == TokenType.PROJECT:
-                columns = self._read_columns()
-                operations.append(('project', columns))
+                operations.append(('project', self._read_columns()))
             elif token.type == TokenType.SELECT:
-                condition = self._read_condition()
-                operations.append(('select', condition))
-        
-        # Parse the primary expression
+                operations.append(('select', self._read_condition()))
+            elif token.type == TokenType.RENAME:
+                operations.append(('rename', self._read_rename()))
+
         node = self._parse_primary()
-        
-        # Apply unary operations in reverse order (from innermost to outermost)
+
+        # Apply unary operators from inside out
         for op_type, op_value in reversed(operations):
             if op_type == 'project':
                 node = ProjectionNode(op_value, node)
             elif op_type == 'select':
                 node = SelectionNode(op_value, node)
-        
+            elif op_type == 'rename':
+                node = RenameNode(op_value, node)
+
         return node
 
     def _parse_primary(self) -> Optional[ExpressionNode]:
-        """Parse primary expressions (tables and parenthesized expressions)"""
         token = self._current_token()
 
         if token.type == TokenType.LPAREN:
             self.pos += 1
-            node = self._parse_crossjoin()  # Parse full expression inside parens
+            node = self._parse_set_op()
             if self._current_token().type == TokenType.RPAREN:
                 self.pos += 1
             return node
@@ -216,14 +288,11 @@ class ExpressionTreeBuilder:
         return None
 
     def _current_token(self) -> Token:
-        """Get current token"""
         if self.pos < len(self.tokens):
             return self.tokens[self.pos]
         return Token(TokenType.EOF, "")
 
     def _read_columns(self) -> List[str]:
-        """Read projection columns"""
-        # print(self._current_token())
         if self._current_token().type == TokenType.IDENTIFIER:
             columns_str = self._current_token().value
             self.pos += 1
@@ -231,88 +300,117 @@ class ExpressionTreeBuilder:
         return ["*"]
 
     def _read_condition(self) -> str:
-        """Read selection condition"""
         if self._current_token().type == TokenType.CONDITION:
             condition = self._current_token().value
             self.pos += 1
             return condition
         return ""
 
+    def _read_rename(self) -> str:
+        if self._current_token().type == TokenType.IDENTIFIER:
+            val = self._current_token().value
+            self.pos += 1
+            return val
+        return "alias"
+
+
+# ── SQL Converter ─────────────────────────────────────────────────────────────
 
 class SQLConverter:
     """Converts expression tree to SQL query"""
     def __init__(self, tree: Optional[ExpressionNode]):
         self.tree = tree
         self.columns = ["*"]
-        self.tables = []
         self.condition = ""
-        self.natural_joins: list = []  # list of (left_node, right_node) tuples
-
-    def _build_from(self, node: Optional[ExpressionNode]) -> str:
-        """Recursively build the FROM expression including joins"""
-        if node is None:
-            return ""
-
-        if isinstance(node, TableNode):
-            return node.name
-
-        if isinstance(node, ProjectionNode) or isinstance(node, SelectionNode):
-            if node.child:
-                return self._build_from(node.child)
-            return ""
-
-        if isinstance(node, CrossJoinNode):
-            left = self._build_from(node.left)
-            right = self._build_from(node.right)
-            return f"({left} CROSS JOIN {right})"
-
-        if isinstance(node, NaturalJoinNode):
-            left = self._build_from(node.left)
-            right = self._build_from(node.right)
-            return f"({left} NATURAL JOIN {right})"
-
-        return ""
 
     def convert(self) -> str:
-        """Convert expression tree to SQL query"""
-        if self.tree:
-            self._traverse(self.tree)
-        from_expr = self._build_from(self.tree)
-        return self._build_sql(from_expr)
+        if not self.tree:
+            return ""
 
-    def _traverse(self, node: ExpressionNode):
-        """Traverse the tree and extract SQL components"""
-        if isinstance(node, TableNode):
-            self.tables.append(node.name)
+        # Set operations are handled directly at the top level to combine full subqueries.
+        if isinstance(self.tree, (UnionNode, IntersectNode, MinusNode)):
+            left_sql = SQLConverter(self.tree.left).convert()
+            right_sql = SQLConverter(self.tree.right).convert()
+            if isinstance(self.tree, UnionNode):
+                return f"{left_sql} UNION {right_sql}"
+            elif isinstance(self.tree, IntersectNode):
+                return f"{left_sql} INTERSECT {right_sql}"
+            elif isinstance(self.tree, MinusNode):
+                return f"{left_sql} EXCEPT {right_sql}"
 
-        elif isinstance(node, ProjectionNode):
+        # For normal queries (project, select, joins, rename)
+        self._extract(self.tree)
+        from_clause = self._build_from(self.tree)
+        
+        if not from_clause:
+            raise ValueError("No table specified in query")
+            
+        columns_str = ", ".join(self.columns) if self.columns else "*"
+        sql = f"SELECT {columns_str} FROM {from_clause}"
+        
+        if self.condition:
+            sql += f" WHERE {self.condition}"
+            
+        return sql
+
+    def _extract(self, node: ExpressionNode):
+        """Extract projection columns and filter condition from the tree"""
+        # Stop extraction at barriers that create derived tables or complete subqueries
+        if isinstance(node, (UnionNode, IntersectNode, MinusNode, RenameNode)):
+            return
+
+        if isinstance(node, ProjectionNode):
             self.columns = node.columns
             if node.child:
-                self._traverse(node.child)
-
+                self._extract(node.child)
         elif isinstance(node, SelectionNode):
             self.condition = node.condition
             if node.child:
-                self._traverse(node.child)
+                self._extract(node.child)
+        elif isinstance(node, (CrossJoinNode, NaturalJoinNode)):
+            self._extract(node.left)
+            self._extract(node.right)
 
-        elif isinstance(node, CrossJoinNode):
-            self._traverse(node.left)
-            self._traverse(node.right)
+    def _build_from(self, node: Optional[ExpressionNode]) -> str:
+        """Recursively build the FROM clause, including JOIN expressions"""
+        if node is None:
+            return ""
+            
+        if isinstance(node, TableNode):
+            return node.name
+            
+        # Unary operations (if bypassed by _extract, they resolve to their child's FROM clause)
+        if isinstance(node, (ProjectionNode, SelectionNode)):
+            return self._build_from(node.child)
 
-    def _build_sql(self) -> str:
-        """Build SQL query from extracted components"""
-        if not self.tables:
-            raise ValueError("No table specified in query")
+        # Set operators inside a FROM clause must be wrapped in a subquery
+        if isinstance(node, (UnionNode, IntersectNode, MinusNode)):
+            sub_sql = SQLConverter(node).convert()
+            return f"({sub_sql})"
+            
+        # Rename operator wraps its child and aliases it
+        if isinstance(node, RenameNode):
+            if isinstance(node.child, TableNode):
+                return f"{node.child.name} AS {node.new_name}"
+            else:
+                sub_sql = SQLConverter(node.child).convert()
+                return f"({sub_sql}) AS {node.new_name}"
 
-        columns_str = ", ".join(self.columns) if self.columns else "*"
-        tables_str = ", ".join(self.tables)
-        sql = f"SELECT {columns_str} FROM {tables_str}"
+        # Joins
+        if isinstance(node, CrossJoinNode):
+            left  = self._build_from(node.left)
+            right = self._build_from(node.right)
+            return f"{left}, {right}"
+            
+        if isinstance(node, NaturalJoinNode):
+            left  = self._build_from(node.left)
+            right = self._build_from(node.right)
+            return f"{left} NATURAL JOIN {right}"
+            
+        return ""
 
-        if self.condition:
-            sql += f" WHERE {self.condition}"
 
-        return sql
-
+# ── QueryProcessor ────────────────────────────────────────────────────────────
 
 class QueryProcessor:
     """Main processor for converting relational algebra queries to SQL"""
@@ -323,58 +421,40 @@ class QueryProcessor:
         self.sql = None
 
     def process(self) -> str:
-        """Process query and return SQL"""
-        # Step 1: Tokenize
         tokenizer = Tokenizer(self.query)
         self.tokens = tokenizer.tokenize()
         print(f"✓ Tokens: {[str(t) for t in self.tokens if t.type != TokenType.EOF]}\n")
-        # print(f"Tokenization successful\n")
 
-        # Step 2: Build expression tree
         builder = ExpressionTreeBuilder(self.tokens)
         self.tree = builder.build()
         print(f"✓ Expression Tree:\n{self.tree.display()}\n")
 
-        # Step 3: Convert to SQL
-        converter = SQLConverter(self.tree) 
-        self.sql = converter.convert()
+        conv = SQLConverter(self.tree)
+        self.sql = conv.convert()
         return self.sql
-
-
 
 
 def query_database(ra_query: str, database_name: str = "database.db") -> tuple[str, list]:
     """Convert a relational algebra expression to SQL, execute it, and return
     the generated SQL and result rows.
-
-    This is the backend entrypoint for both CLI and web front ends.
     """
-    # convert the expression
     processor = QueryProcessor(ra_query)
     sql = processor.process()
-    # lazy-import to avoid circular imports during module load
     from sql_conector import execute
     import sqlite3
     try:
         rows = execute(sql, database_name=database_name)
     except sqlite3.OperationalError as err:
-        # propagate with clearer message for front ends
         raise ValueError(f"database error: {err}")
     return sql, rows
 
 
 if __name__ == "__main__":
-    # simple command-line prompt if the module is executed directly
     try:
-        query = input("Enter the query (e.g., π Brand σ Price<100 (Foods))\n> ")
-        sql, rows = query_database(query)
+        q = input("Enter the query (e.g., π name (students) ∪ π name (professor))\n> ")
+        processor = QueryProcessor(q)
+        sql = processor.process()
         print(f"✓ SQL Query: {sql}")
-        if rows:
-            print("✓ Result rows:")
-            for r in rows:
-                print(r)
-        else:
-            print("✓ Query executed (no rows returned or non-SELECT)")
     except ValueError as e:
         print(f"✗ Error: {e}")
     except Exception as e:

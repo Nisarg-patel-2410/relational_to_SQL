@@ -37,12 +37,20 @@ def query():
         processor = converter.QueryProcessor(raw)
         sql = processor.process()
 
-        # Execute against SQLite
-        rows = sql_conector.execute(sql)
-        if rows is None:
-            rows = []
+        # Execute against SQLite — fetch rows AND column names
+        import sqlite3
+        conn = sqlite3.connect("database.db")
+        cur = conn.cursor()
+        cur.execute(sql)
+        rows = cur.fetchall()
+        columns = [description[0] for description in cur.description] if cur.description else []
+        conn.close()
 
-        return jsonify({"sql": sql, "rows": [list(r) for r in rows]})
+        return jsonify({
+            "sql": sql,
+            "columns": columns,
+            "rows": [list(r) for r in rows]
+        })
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
