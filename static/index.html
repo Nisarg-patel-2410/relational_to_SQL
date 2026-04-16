@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({startOnLoad:true});</script>
 </head>
 <body>
 
@@ -22,9 +24,18 @@
           <p class="tagline">π σ × ⋈ → SQL, instantly</p>
         </div>
       </div>
-      <div id="db-badge" class="db-badge hidden">
-        <span class="db-dot"></span>
-        <span id="db-badge-text">Connected</span>
+      <div class="db-controls">
+        <select id="db-select" class="db-select">
+          <option value="database.db">database.db</option>
+        </select>
+        <button id="upload-db-btn" class="btn-ghost btn-small" title="Upload custom SQLite database">
+           Upload DB
+        </button>
+        <input type="file" id="db-file-input" accept=".db,.sqlite,.sqlite3" style="display: none;" />
+        <div id="db-badge" class="db-badge hidden">
+          <span class="db-dot"></span>
+          <span id="db-badge-text">Connected</span>
+        </div>
       </div>
     </div>
   </header>
@@ -56,14 +67,15 @@
           Symbols
         </h2>
         <div class="symbol-grid">
-          <button class="sym-btn" data-sym="π" title="Projection">π</button>
-          <button class="sym-btn" data-sym="σ" title="Selection">σ</button>
-          <button class="sym-btn" data-sym="×" title="Cross Join">×</button>
-          <button class="sym-btn" data-sym="⋈" title="Natural Join">⋈</button>
-          <button class="sym-btn" data-sym="∪" title="Union">∪</button>
-          <button class="sym-btn" data-sym="∩" title="Intersection">∩</button>
-          <button class="sym-btn" data-sym="−" title="Difference">−</button>
-          <button class="sym-btn" data-sym="ρ" title="Rename">ρ</button>
+          <button class="sym-btn" data-sym="π" data-tooltip="π col1, col2 (table)" title="Projection">π</button>
+          <button class="sym-btn" data-sym="σ" data-tooltip="σ condition (table)" title="Selection">σ</button>
+          <button class="sym-btn" data-sym="×" data-tooltip="(table1 × table2)" title="Cross Join">×</button>
+          <button class="sym-btn" data-sym="⋈" data-tooltip="(table1 ⋈ table2)" title="Natural Join">⋈</button>
+          <button class="sym-btn" data-sym="∪" data-tooltip="table1 ∪ table2" title="Union">∪</button>
+          <button class="sym-btn" data-sym="∩" data-tooltip="table1 ∩ table2" title="Intersection">∩</button>
+          <button class="sym-btn" data-sym="−" data-tooltip="table1 − table2" title="Difference">−</button>
+          <button class="sym-btn" data-sym="÷" data-tooltip="table1 ÷ table2" title="Division">÷</button>
+          <button class="sym-btn" data-sym="ρ" data-tooltip="ρ new_name(c1,c2) (table)" title="Rename">ρ</button>
         </div>
       </div>
 
@@ -73,6 +85,25 @@
           Database Tables
         </h2>
         <ul id="tables-list" class="tables-list"><li class="loading-text">Loading…</li></ul>
+      </div>
+
+      <div class="card er-card er-zoom-container">
+        <h2 class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          ER Diagram
+        </h2>
+        <div class="mermaid er-diagram">
+erDiagram
+  dean ||--o{ department : supervises
+  department ||--o{ professor : employs
+  department ||--o{ students : enrolls
+  department ||--o{ subject : offers
+  professor ||--o{ subject : teaches
+  students ||--o| mentor : becomes
+  mentor ||--o{ students : mentors
+  students ||--o{ result : receives
+  subject ||--o{ result : has
+        </div>
       </div>
 
     </aside>
@@ -153,6 +184,14 @@
 
   <!-- Toast notification -->
   <div id="toast" class="toast hidden">Copied!</div>
+
+  <!-- ER Diagram Modal -->
+  <div id="er-modal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-modal">&times;</span>
+      <div id="modal-er-body"></div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>

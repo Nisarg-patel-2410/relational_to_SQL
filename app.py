@@ -7,8 +7,14 @@ from flask import Flask, request, jsonify, send_from_directory
 import os
 import converter
 import sql_conector
+import shutil
+import sqlite3
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+
+# Ensure dbs directory exists
+DB_DIR = "user_dbs"
+os.makedirs(DB_DIR, exist_ok=True)
 
 # ── serve frontend ──────────────────────────────────────────────────────────
 
@@ -34,12 +40,15 @@ def query():
         raw = raw.replace("?", "π")
 
         # Convert relational algebra → SQL
-        processor = converter.QueryProcessor(raw)
+        db_name = request.headers.get("X-DB-Name", "database.db")
+        if db_name != "database.db":
+            db_name = os.path.join(DB_DIR, db_name)
+            
+        processor = converter.QueryProcessor(raw, db_name=db_name)
         sql = processor.process()
 
         # Execute against SQLite — fetch rows AND column names
-        import sqlite3
-        conn = sqlite3.connect("database.db")
+        conn = sqlite3.connect(db_name)
         cur = conn.cursor()
         cur.execute(sql)
         rows = cur.fetchall()
@@ -63,12 +72,53 @@ def query():
 @app.route("/tables", methods=["GET"])
 def tables():
     try:
-        rows = sql_conector.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        )
+        db_name = request.headers.get("X-DB-Name", "database.db")
+        if db_name != "database.db":
+            db_path = os.path.join(DB_DIR, db_name)
+        else:
+            db_path = "database.db"
+            
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        rows = cur.fetchall()
+        conn.close()
+        
         return jsonify({"tables": [r[0] for r in rows] if rows else []})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ── Dynamic DB switching endpoints ──────────────────────────────────────────
+
+@app.route("/databases", methods=["GET"])
+def databases():
+    try:
+        dbs = ["database.db"]
+        if os.path.exists(DB_DIR):
+            for f in os.listdir(DB_DIR):
+                if f.endswith((".db", ".sqlite", ".sqlite3")):
+                    dbs.append(f)
+        return jsonify({"databases": dbs})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/upload-db", methods=["POST"])
+def upload_db():
+    if "file" not in request.files:
+        return jsonify({"error": "No file parameter"}), 400
+        
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+        
+    if not file.filename.endswith((".db", ".sqlite", ".sqlite3")):
+        return jsonify({"error": "Invalid file type. Must be .db or .sqlite"}), 400
+        
+    filename = file.filename
+    save_path = os.path.join(DB_DIR, filename)
+    file.save(save_path)
+    
+    return jsonify({"message": f"Successfully uploaded {filename}", "db_name": filename})
 
 
 if __name__ == "__main__":

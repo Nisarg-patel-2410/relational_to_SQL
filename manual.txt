@@ -1,0 +1,76 @@
+================================================================================
+                    RELATIONAL ALGEBRA EXPLORER - USER MANUAL
+================================================================================
+
+Welcome to the Relational Algebra Explorer! This tool allows you to write relational algebra expressions, convert them to SQL, and execute them instantly against an SQLite dataset. 
+
+Here are the rules, syntax guides, and database settings for using this tool.
+
+--------------------------------------------------------------------------------
+1. SUPPORTED OPERATIONS & SYNTAX
+--------------------------------------------------------------------------------
+You can use the built-in symbol buttons on the website to insert standard relational algebra operators, or type them manually if you prefer.
+
+• Projection (π): Retrieves specific columns.
+  Syntax: π col1, col2, ... (table_name)
+  Example: π name, email (professor)
+
+• Selection (σ): Filters rows based on a condition.
+  Syntax: σ condition (table_name)
+  Example: σ gender='Female' AND is_hod=1 (professor)
+
+• Cross Join (×): Cartesian product of two tables.
+  Syntax: (table1 × table2)
+  Example: (students × department)
+
+• Natural Join (⋈ or ⨝): Joins two tables based on matching column names.
+  Syntax: (table1 ⋈ table2)
+  Example: (students ⋈ department)
+
+• Union (∪): Combines rows from two queries (requires same schema).
+  Syntax: query1 ∪ query2
+  Example: π name (professor) ∪ π name (students)
+
+• Intersection (∩): Retrieves common rows from two queries.
+  Syntax: query1 ∩ query2
+  Example: (π student_id (mentor)) ∩ (π student_id (result))
+
+• Difference / Minus (− or -): Retrieves rows in query1 that are not in query2.
+  Syntax: query1 − query2
+
+• Division (÷ or /): Relational division. Finds entities in the left relation that interact with ALL entities in the right relation.
+  Syntax: query1 ÷ query2
+  Example: (π student_id, subject_id (result)) ÷ (π subject_id (subject))
+  
+• Rename (ρ): Renames the resulting table, and optionally columns.
+  Syntax A (rename table):     ρ new_table (query)
+  Syntax B (rename columns):   ρ new_table(col1, col2) (query)
+  Example: ρ prof_info(staff_id, full_name, role) (professor)
+
+--------------------------------------------------------------------------------
+2. GENERAL RULES FOR WRITING EXPRESSIONS
+--------------------------------------------------------------------------------
+1. Case Sensitivity: Table and column names depend on the underlying database schema. SQLite is generally case-insensitive for column names.
+2. Parentheses: Proper scoping requires placing sub-queries or join operations in parentheses, e.g., π name ( (table1 × table2) )
+3. Spaces: A space is required between the operation (e.g. π), its condition/columns, and its target relation.
+4. Strings: Use single quotes ('value') for condition strings in Selections.
+
+--------------------------------------------------------------------------------
+3. WORKING WITH DATABASES
+--------------------------------------------------------------------------------
+By default, the platform runs against `database.db`, representing a University schema (Deans, Departments, Professors, Students, Subjects, Results).
+
+Uploading Custom Databases:
+1. Click the "Upload DB" button in the top right menu bar.
+2. Select your valid `.db`, `.sqlite`, or `.sqlite3` file.
+3. Once successfully uploaded, it will be added to the dropdown selector.
+4. Changing the selected database will dynamically refresh your active tables on the left "Database Tables" menu.
+5. All executed queries will now run seamlessly against the selected database.
+
+--------------------------------------------------------------------------------
+4. INTERACTIVE FEATURES
+--------------------------------------------------------------------------------
+- Syntax Suggestions: Hover your mouse over any symbol in the "Symbols" card to see its required syntax structure in a tooltip.
+- ER Diagram Viewer: The active default Database Schema is visible on the bottom left. Click anywhere on the diagram to expand it into full-screen view.
+
+================================================================================

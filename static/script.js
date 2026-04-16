@@ -18,6 +18,9 @@ const copySqlBtn  = document.getElementById('copy-sql-btn');
 const toast       = document.getElementById('toast');
 const dbBadge     = document.getElementById('db-badge');
 const tablesList  = document.getElementById('tables-list');
+const dbSelect    = document.getElementById('db-select');
+const uploadBtn   = document.getElementById('upload-db-btn');
+const fileInput   = document.getElementById('db-file-input');
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -95,8 +98,11 @@ copySqlBtn.addEventListener('click', () => {
 
 // ── Load available tables on startup ─────────────────────────────────────
 async function loadTables() {
+  const dbName = dbSelect.value;
   try {
-    const resp = await fetch('/tables');
+    const resp = await fetch('/tables', {
+      headers: { 'X-DB-Name': dbName }
+    });
     if (!resp.ok) return;
     const data = await resp.json();
     tablesList.innerHTML = '';
@@ -116,6 +122,71 @@ async function loadTables() {
   }
 }
 
+// ── Database Handling ─────────────────────────────────────────────────────
+
+async function loadDatabases() {
+  try {
+    const resp = await fetch('/databases');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    
+    // Remember current selection
+    const current = dbSelect.value;
+    dbSelect.innerHTML = '';
+    
+    data.databases.forEach(db => {
+      const opt = document.createElement('option');
+      opt.value = db;
+      opt.textContent = db;
+      dbSelect.appendChild(opt);
+    });
+    
+    // Restore selection if still exists
+    if (data.databases.includes(current)) {
+      dbSelect.value = current;
+    }
+  } catch(e) {
+    console.error("Could not load databases");
+  }
+}
+
+dbSelect.addEventListener('change', () => {
+  loadTables();
+});
+
+uploadBtn.addEventListener('click', () => {
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', async (e) => {
+  if (!e.target.files.length) return;
+  const file = e.target.files[0];
+  
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  try {
+    const resp = await fetch('/upload-db', {
+      method: "POST",
+      body: formData
+    });
+    
+    if (resp.ok) {
+      showToast("Uploaded successfully!");
+      await loadDatabases();
+      dbSelect.value = file.name;
+      loadTables();
+    } else {
+      const data = await resp.json();
+      showError(data.error || "Upload failed");
+    }
+  } catch (err) {
+    showError("Upload failed: " + err.message);
+  }
+});
+
+// Init
+loadDatabases();
 loadTables();
 
 // ── Render result rows as <table> ─────────────────────────────────────────
@@ -171,9 +242,13 @@ form.addEventListener('submit', async ev => {
   setLoading(true);
 
   try {
+    const dbName = dbSelect.value;
     const resp = await fetch('/query', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-DB-Name': dbName
+      },
       body: JSON.stringify({ query: raw }),
     });
 
@@ -214,3 +289,37 @@ queryEl.addEventListener('input', () => {
   queryEl.style.height = 'auto';
   queryEl.style.height = Math.min(queryEl.scrollHeight, 280) + 'px';
 });
+
+// ── ER Diagram Modal ─────────────────────────────────────────────────────
+const erDiagram = document.querySelector('.er-diagram');
+const erModal = document.getElementById('er-modal');
+const modalBody = document.getElementById('modal-er-body');
+const closeModal = document.querySelector('.close-modal');
+
+if (erDiagram && erModal) {
+  erDiagram.addEventListener('click', () => {
+    // Clone the SVG currently inside the mermaid div
+    const svg = erDiagram.querySelector('svg');
+    if (svg) {
+      modalBody.innerHTML = '';
+      const cloned = svg.cloneNode(true);
+      // Remove max height and let it scale
+      cloned.style.maxHeight = '80vh';
+      cloned.style.maxWidth = '90vw';
+      cloned.style.height = 'auto';
+      cloned.style.width = '100%';
+      modalBody.appendChild(cloned);
+      erModal.classList.remove('hidden');
+    }
+  });
+
+  closeModal.addEventListener('click', () => {
+    erModal.classList.add('hidden');
+  });
+
+  erModal.addEventListener('click', (e) => {
+    if (e.target === erModal) {
+      erModal.classList.add('hidden');
+    }
+  });
+}
