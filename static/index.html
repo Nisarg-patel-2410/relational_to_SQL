@@ -76,6 +76,8 @@
           <button class="sym-btn" data-sym="−" data-tooltip="table1 − table2" title="Difference">−</button>
           <button class="sym-btn" data-sym="÷" data-tooltip="table1 ÷ table2" title="Division">÷</button>
           <button class="sym-btn" data-sym="ρ" data-tooltip="ρ new_name(c1,c2) (table)" title="Rename">ρ</button>
+          <button class="sym-btn sym-text" data-sym=" AND " data-tooltip="σ cond1 AND cond2 (table)" title="Logical AND">AND</button>
+          <button class="sym-btn sym-text" data-sym=" OR " data-tooltip="σ cond1 OR cond2 (table)" title="Logical OR">OR</button>
         </div>
       </div>
 
@@ -165,6 +167,25 @@ erDiagram
           <pre id="sql-output" class="sql-pre"></pre>
         </div>
 
+        <!-- Expression Tree -->
+        <div class="card tree-card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M2 12l10-10 10 10"/></svg>
+              Expression Tree
+            </h2>
+          </div>
+          <div id="tree-container" class="tree-container"></div>
+          <!-- Node hover popup -->
+          <div id="node-popup" class="node-popup hidden">
+            <div class="popup-header">
+              <span id="popup-label"></span>
+              <span id="popup-rowcount" class="popup-badge"></span>
+            </div>
+            <div id="popup-body" class="popup-body"></div>
+          </div>
+        </div>
+
         <div class="card rows-card">
           <div class="card-header">
             <h2 class="card-title">
@@ -173,6 +194,8 @@ erDiagram
             </h2>
             <span id="row-count" class="row-count-badge"></span>
           </div>
+          <!-- Query title banner -->
+          <div id="query-title" class="query-title"></div>
           <div id="rows-output" class="table-wrap">
             <table id="rows-table"></table>
           </div>

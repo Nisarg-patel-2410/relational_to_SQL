@@ -645,3 +645,218 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--subtext); }
+
+/* ── AND / OR keyword buttons ── */
+.sym-text {
+  font-size: 0.7rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 6px 2px;
+}
+
+/* ── Query title above results ── */
+.query-title {
+  font-family: var(--font-mono);
+  font-size: .88rem;
+  color: var(--accent-3);
+  padding: .5rem 1rem .25rem;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: .5rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  opacity: 0.85;
+}
+.query-title:empty { display: none; }
+
+/* ── Expression Tree card ── */
+.tree-card {
+  position: relative;
+  overflow: visible;
+}
+
+.tree-container {
+  overflow-x: auto;
+  padding: 1rem 0 .5rem;
+  min-height: 80px;
+}
+
+/* SVG connector lines */
+.tree-svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.tree-svg line {
+  stroke: rgba(99,102,241,0.45);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+/* Tree levels wrapper */
+.tree-levels {
+  display: flex;
+  flex-direction: column-reverse;   /* root at top after reversing render order */
+  gap: 28px;
+  align-items: center;
+  padding-bottom: .5rem;
+  position: relative;
+}
+
+/* Each horizontal level */
+.tree-level {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Individual node box */
+.tree-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  position: relative;
+}
+
+.tree-node-box {
+  background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(139,92,246,.12));
+  border: 1.5px solid rgba(99,102,241,.4);
+  border-radius: 8px;
+  padding: 8px 14px;
+  min-width: 90px;
+  text-align: center;
+  transition: border-color .2s, box-shadow .2s, transform .15s;
+  position: relative;
+}
+
+.tree-node-box:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 18px rgba(0,0,0,.4);
+  transform: translateY(-2px);
+}
+
+.tree-node-box.node-leaf {
+  background: linear-gradient(135deg, rgba(6,182,212,.12), rgba(6,182,212,.07));
+  border-color: rgba(6,182,212,.4);
+}
+.tree-node-box.node-leaf:hover { border-color: var(--accent-3); box-shadow: 0 0 0 3px rgba(6,182,212,.25); }
+
+.tree-node-label {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.tree-node-rows {
+  font-size: .68rem;
+  color: var(--subtext);
+  margin-top: 2px;
+}
+
+/* ── Node hover popup ── */
+.node-popup {
+  position: fixed;
+  z-index: 500;
+  background: var(--card);
+  border: 1px solid rgba(99,102,241,.5);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 220px;
+  max-width: 380px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  pointer-events: none;
+  animation: popup-in .15s ease-out;
+}
+
+@keyframes popup-in {
+  from { opacity: 0; transform: translateY(6px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+#popup-label {
+  font-family: var(--font-mono);
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.popup-badge {
+  font-size: .68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(99,102,241,.2);
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.popup-body {
+  overflow-x: auto;
+}
+
+.popup-table {
+  border-collapse: collapse;
+  font-size: .75rem;
+  width: 100%;
+}
+
+.popup-table th {
+  font-weight: 700;
+  color: var(--accent);
+  padding: 3px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--card-border);
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+
+.popup-table td {
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.popup-table tbody tr:hover { background: var(--card-hover); }
+
+.popup-more {
+  font-size: .7rem;
+  color: var(--muted);
+  margin-top: 5px;
+  text-align: right;
+  font-style: italic;
+}
+
+.popup-empty {
+  color: var(--muted);
+  font-style: italic;
+  font-size: .8rem;
+}

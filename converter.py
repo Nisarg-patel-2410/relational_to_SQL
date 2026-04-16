@@ -74,7 +74,7 @@ class Tokenizer:
                 self.pos += 1
             else:
                 token_value = self._read_token()
-                if any(op in token_value for op in "<>=!"):
+                if self._looks_like_condition(token_value):
                     self.tokens.append(Token(TokenType.CONDITION, token_value))
                 else:
                     self.tokens.append(Token(TokenType.IDENTIFIER, token_value))
@@ -88,6 +88,14 @@ class Tokenizer:
         while self.pos < len(self.query) and self.query[self.pos] not in "()πσ×⋈⨝∪∩−-÷/ρ":
             self.pos += 1
         return self.query[start:self.pos].strip()
+
+    def _looks_like_condition(self, value: str) -> bool:
+        """Return True if value looks like a filter condition (comparison ops or AND/OR)."""
+        upper = value.upper()
+        return (
+            any(op in value for op in "<>=!") or
+            " AND " in upper or " OR " in upper
+        )
 
 
 # ── AST Nodes ────────────────────────────────────────────────────────────────

@@ -21,6 +21,12 @@ const tablesList  = document.getElementById('tables-list');
 const dbSelect    = document.getElementById('db-select');
 const uploadBtn   = document.getElementById('upload-db-btn');
 const fileInput   = document.getElementById('db-file-input');
+const queryTitle  = document.getElementById('query-title');
+const treeContainer = document.getElementById('tree-container');
+const nodePopup   = document.getElementById('node-popup');
+const popupLabel  = document.getElementById('popup-label');
+const popupRowCount = document.getElementById('popup-rowcount');
+const popupBody   = document.getElementById('popup-body');
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -272,10 +278,16 @@ form.addEventListener('submit', async ev => {
     // Show SQL
     sqlOut.textContent = data.sql;
 
+    // Show query title above results table
+    if (queryTitle) queryTitle.textContent = '\u25b6 ' + raw;
+
     // Show rows
     renderTable(data.rows, data.columns || []);
 
     resultSec.classList.remove('hidden');
+
+    // Fetch and render expression tree (non-blocking)
+    fetchAndRenderTree(raw);
 
   } catch (err) {
     showError(err.message);
@@ -298,12 +310,10 @@ const closeModal = document.querySelector('.close-modal');
 
 if (erDiagram && erModal) {
   erDiagram.addEventListener('click', () => {
-    // Clone the SVG currently inside the mermaid div
     const svg = erDiagram.querySelector('svg');
     if (svg) {
       modalBody.innerHTML = '';
       const cloned = svg.cloneNode(true);
-      // Remove max height and let it scale
       cloned.style.maxHeight = '80vh';
       cloned.style.maxWidth = '90vw';
       cloned.style.height = 'auto';
@@ -322,4 +332,213 @@ if (erDiagram && erModal) {
       erModal.classList.add('hidden');
     }
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  EXPRESSION TREE RENDERER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function fetchAndRenderTree(rawQuery) {
+  if (!treeContainer) return;
+  treeContainer.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:8px">Building tree…</div>';
+
+  try {
+    const dbName = dbSelect ? dbSelect.value : 'database.db';
+    const resp = await fetch('/query-tree', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-DB-Name': dbName
+      },
+      body: JSON.stringify({ query: rawQuery })
+    });
+    const data = await resp.json();
+    if (data.error) {
+      treeContainer.innerHTML = `<div style="color:var(--error);font-size:.8rem;padding:8px">Tree error: ${data.error}</div>`;
+      return;
+    }
+    renderTree(data.tree);
+  } catch (e) {
+    treeContainer.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:8px">Could not load tree.</div>';
+  }
+}
+
+// ── Flatten tree into BFS levels ─────────────────────────────────────────
+function treeToLevels(root) {
+  const levels = [];
+  let current = [root];
+  while (current.length) {
+    levels.push(current);
+    const next = [];
+    current.forEach(n => (n.children || []).forEach(c => next.push(c)));
+    current = next;
+  }
+  return levels;  // levels[0] = root, levels[last] = leaves
+}
+
+// ── Render tree into #tree-container ─────────────────────────────────────
+function renderTree(root) {
+  if (!root) { treeContainer.innerHTML = ''; return; }
+
+  treeContainer.innerHTML = '';
+
+  // Wrapper — we'll insert an SVG overlay for lines
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:relative; display:inline-block; min-width:100%; padding-bottom:8px;';
+
+  // Outer flex column (root at top)
+  const col = document.createElement('div');
+  col.className = 'tree-levels';
+  col.style.flexDirection = 'column'; // root → leaves top-down
+
+  const levels = treeToLevels(root);
+  const nodeEls = new Map();      // node object → DOM element
+
+  levels.forEach((level, li) => {
+    const row = document.createElement('div');
+    row.className = 'tree-level';
+
+    level.forEach(node => {
+      const isLeaf = !node.children || node.children.length === 0;
+      const el = document.createElement('div');
+      el.className = 'tree-node';
+
+      const box = document.createElement('div');
+      box.className = 'tree-node-box' + (isLeaf ? ' node-leaf' : '');
+
+      const lbl = document.createElement('div');
+      lbl.className = 'tree-node-label';
+      lbl.textContent = node.label;
+      lbl.title = node.label;
+
+      const rows = document.createElement('div');
+      rows.className = 'tree-node-rows';
+      rows.textContent = node.rowCount + ' row' + (node.rowCount !== 1 ? 's' : '');
+
+      box.appendChild(lbl);
+      box.appendChild(rows);
+      el.appendChild(box);
+      row.appendChild(el);
+
+      nodeEls.set(node, el);
+
+      // Hover popup
+      box.addEventListener('mouseenter', (e) => showNodePopup(e, node));
+      box.addEventListener('mousemove',  (e) => positionPopup(e));
+      box.addEventListener('mouseleave', hideNodePopup);
+    });
+
+    col.appendChild(row);
+  });
+
+  wrapper.appendChild(col);
+  treeContainer.appendChild(wrapper);
+
+  // Draw SVG connector lines after layout
+  requestAnimationFrame(() => drawLines(root, nodeEls, wrapper));
+}
+
+// ── Draw dashed SVG lines between parent and child nodes ─────────────────
+function drawLines(root, nodeEls, wrapper) {
+  const existing = wrapper.querySelector('.tree-svg');
+  if (existing) existing.remove();
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.className = 'tree-svg';
+  const wRect = wrapper.getBoundingClientRect();
+
+  function connect(parent, child) {
+    const pEl = nodeEls.get(parent);
+    const cEl = nodeEls.get(child);
+    if (!pEl || !cEl) return;
+
+    const pBox = pEl.querySelector('.tree-node-box');
+    const cBox = cEl.querySelector('.tree-node-box');
+    const pR = pBox.getBoundingClientRect();
+    const cR = cBox.getBoundingClientRect();
+
+    const x1 = pR.left + pR.width / 2 - wRect.left;
+    const y1 = pR.bottom - wRect.top;
+    const x2 = cR.left + cR.width / 2 - wRect.left;
+    const y2 = cR.top - wRect.top;
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1);
+    line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2);
+    line.setAttribute('y2', y2);
+    svg.appendChild(line);
+
+    (child.children || []).forEach(grandchild => connect(child, grandchild));
+  }
+
+  (root.children || []).forEach(child => connect(root, child));
+
+  svg.setAttribute('viewBox', `0 0 ${wRect.width} ${wRect.height}`);
+  svg.style.cssText = `position:absolute;top:0;left:0;width:${wRect.width}px;height:${wRect.height}px;pointer-events:none;overflow:visible;`;
+  wrapper.appendChild(svg);
+}
+
+// ── Node hover popup helpers ──────────────────────────────────────────────
+function showNodePopup(e, node) {
+  popupLabel.textContent = node.label;
+  popupRowCount.textContent = node.rowCount + ' rows';
+
+  popupBody.innerHTML = '';
+  if (!node.columns || node.columns.length === 0) {
+    popupBody.innerHTML = '<div class="popup-empty">No data available</div>';
+  } else if (!node.preview || node.preview.length === 0) {
+    popupBody.innerHTML = '<div class="popup-empty">(0 rows)</div>';
+  } else {
+    const tbl = document.createElement('table');
+    tbl.className = 'popup-table';
+
+    const thead = document.createElement('thead');
+    const hrow = document.createElement('tr');
+    node.columns.forEach(c => {
+      const th = document.createElement('th');
+      th.textContent = c;
+      hrow.appendChild(th);
+    });
+    thead.appendChild(hrow);
+    tbl.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    node.preview.forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach(cell => {
+        const td = document.createElement('td');
+        td.textContent = cell === null ? 'NULL' : cell;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    popupBody.appendChild(tbl);
+
+    if (node.rowCount > node.preview.length) {
+      const more = document.createElement('div');
+      more.className = 'popup-more';
+      more.textContent = `… and ${node.rowCount - node.preview.length} more rows`;
+      popupBody.appendChild(more);
+    }
+  }
+
+  positionPopup(e);
+  nodePopup.classList.remove('hidden');
+}
+
+function positionPopup(e) {
+  const x = e.clientX + 14;
+  const y = e.clientY - 14;
+  const popW = nodePopup.offsetWidth || 260;
+  const popH = nodePopup.offsetHeight || 200;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  nodePopup.style.left = (x + popW > vw ? vw - popW - 8 : x) + 'px';
+  nodePopup.style.top  = (y + popH > vh ? vh - popH - 8 : y) + 'px';
+}
+
+function hideNodePopup() {
+  nodePopup.classList.add('hidden');
 }
