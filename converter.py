@@ -94,7 +94,8 @@ class Tokenizer:
         upper = value.upper()
         return (
             any(op in value for op in "<>=!") or
-            " AND " in upper or " OR " in upper
+            " AND " in upper or " OR " in upper or
+            "∧" in value or "∨" in value   # ∧ = AND, ∨ = OR
         )
 
 
@@ -425,9 +426,11 @@ class SQLConverter:
         sql = f"SELECT {columns_str} FROM {from_clause}"
         
         if self.condition:
-            sql += f" WHERE {self.condition}"
+            cond = self.condition.replace("∧", " AND ").replace("∨", " OR ")
+            sql += f" WHERE {cond}"
             
         return sql
+
 
     def _extract(self, node: ExpressionNode):
         """Extract projection columns and filter condition from the tree"""

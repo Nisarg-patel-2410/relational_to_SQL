@@ -175,6 +175,34 @@ def query_tree():
         return jsonify({"error": f"Server error: {e}"}), 500
 
 
+# ── Schema endpoint ──────────────────────────────────────────────────────────
+
+@app.route("/schema", methods=["GET"])
+def schema():
+    try:
+        db_name = request.headers.get("X-DB-Name", "database.db")
+        db_path = db_name if db_name == "database.db" else os.path.join(DB_DIR, db_name)
+
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        tables = [r[0] for r in cur.fetchall()]
+
+        result = []
+        for tbl in tables:
+            cur.execute(f"PRAGMA table_info([{tbl}])")
+            cols = [{"name": row[1], "type": row[2].upper() or "TEXT"}
+                    for row in cur.fetchall()]
+            result.append({"name": tbl, "columns": cols})
+
+        conn.close()
+        return jsonify({"tables": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
 
 # ── also expose /tables so the UI can list available tables ─────────────────
 

@@ -158,6 +158,7 @@ async function loadDatabases() {
 
 dbSelect.addEventListener('change', () => {
   loadTables();
+  loadSchema();
 });
 
 uploadBtn.addEventListener('click', () => {
@@ -182,6 +183,7 @@ fileInput.addEventListener('change', async (e) => {
       await loadDatabases();
       dbSelect.value = file.name;
       loadTables();
+      loadSchema();
     } else {
       const data = await resp.json();
       showError(data.error || "Upload failed");
@@ -194,6 +196,93 @@ fileInput.addEventListener('change', async (e) => {
 // Init
 loadDatabases();
 loadTables();
+loadSchema();
+
+// ── Schema accordion ────────────────────────────────────────────────────
+const schemaToggle = document.getElementById('schema-toggle');
+const schemaBody   = document.getElementById('schema-body');
+const schemaList   = document.getElementById('schema-list');
+
+if (schemaToggle) {
+  schemaToggle.addEventListener('click', () => {
+    const open = schemaToggle.getAttribute('aria-expanded') === 'true';
+    schemaToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+    schemaBody.classList.toggle('collapsed', open);
+  });
+}
+
+async function loadSchema() {
+  const sl = document.getElementById('schema-list');
+  if (!sl) return;
+  const dbName = dbSelect ? dbSelect.value : 'database.db';
+  try {
+    const resp = await fetch('/schema', { headers: { 'X-DB-Name': dbName } });
+    const data = await resp.json();
+    if (data.error || !data.tables) {
+      sl.innerHTML = '<div class="loading-text">Schema unavailable</div>';
+      return;
+    }
+    renderSchema(data.tables, sl);
+  } catch(e) {
+    sl.innerHTML = '<div class="loading-text">Failed to load</div>';
+  }
+}
+
+function renderSchema(tables, sl) {
+  if (!sl) sl = document.getElementById('schema-list');
+  sl.innerHTML = '';
+
+  if (!tables.length) {
+    sl.innerHTML = '<div class="loading-text">No tables found</div>';
+    return;
+  }
+  tables.forEach(tbl => {
+    const group = document.createElement('div');
+    group.className = 'schema-table-group';
+
+    // Table header row — click inserts table name
+    const header = document.createElement('div');
+    header.className = 'schema-table-name';
+    header.innerHTML = `${tbl.name} <span class="tbl-arrow">▶</span>`;
+
+    header.addEventListener('click', (e) => {
+      // Toggle columns
+      cols.classList.toggle('open');
+      header.classList.toggle('open');
+      // Insert table name into editor on click
+      insertAtCursor(queryEl, tbl.name);
+    });
+
+    // Columns list
+    const cols = document.createElement('div');
+    cols.className = 'schema-cols';
+
+    tbl.columns.forEach(col => {
+      const item = document.createElement('div');
+      item.className = 'schema-col-item';
+      item.innerHTML =
+        `<span class="schema-col-name">${col.name}</span>` +
+        `<span class="schema-col-type">${col.type}</span>`;
+      item.addEventListener('click', () => insertAtCursor(queryEl, col.name));
+      cols.appendChild(item);
+    });
+
+    group.appendChild(header);
+    group.appendChild(cols);
+    sl.appendChild(group);
+  });
+}
+
+
+/** Insert text at the current cursor position in a textarea */
+function insertAtCursor(el, text) {
+  el.focus();
+  const start = el.selectionStart;
+  const end   = el.selectionEnd;
+  el.value = el.value.slice(0, start) + text + el.value.slice(end);
+  el.selectionStart = el.selectionEnd = start + text.length;
+  el.dispatchEvent(new Event('input'));
+}
 
 // ── Render result rows as <table> ─────────────────────────────────────────
 function renderTable(rows, colNames) {
@@ -426,6 +515,25 @@ function renderTree(root) {
       box.addEventListener('mouseenter', (e) => showNodePopup(e, node));
       box.addEventListener('mousemove',  (e) => positionPopup(e));
       box.addEventListener('mouseleave', hideNodePopup);
+
+      // Click → show this node's result in Query Results panel
+      box.addEventListener('click', () => {
+        // Remove active from all boxes
+        document.querySelectorAll('.tree-node-box').forEach(b => b.classList.remove('node-active'));
+        box.classList.add('node-active');
+
+        // Show full result (up to all preview rows we have)
+        if (node.columns && node.columns.length > 0) {
+          if (queryTitle) {
+            queryTitle.textContent = '▶ [Node] ' + node.label;
+          }
+          renderTable(node.preview || [], node.columns);
+          rowCount.textContent = node.rowCount + ' row' + (node.rowCount !== 1 ? 's' : '');
+          resultSec.classList.remove('hidden');
+          // Scroll to results
+          resultSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
     });
 
     col.appendChild(row);

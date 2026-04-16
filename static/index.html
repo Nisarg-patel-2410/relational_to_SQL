@@ -46,6 +46,20 @@
     <!-- Sidebar: examples + symbol palette + tables -->
     <aside class="sidebar">
 
+      <!-- Database Schema Panel -->
+      <div class="card schema-card">
+        <button class="schema-header" id="schema-toggle" aria-expanded="true">
+          <span class="schema-header-left">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+            Database
+          </span>
+          <svg class="schema-chevron" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="schema-body" class="schema-body">
+          <div id="schema-list" class="schema-list"><div class="loading-text">Loading…</div></div>
+        </div>
+      </div>
+
       <div class="card examples-card">
         <h2 class="card-title">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
@@ -76,8 +90,8 @@
           <button class="sym-btn" data-sym="−" data-tooltip="table1 − table2" title="Difference">−</button>
           <button class="sym-btn" data-sym="÷" data-tooltip="table1 ÷ table2" title="Division">÷</button>
           <button class="sym-btn" data-sym="ρ" data-tooltip="ρ new_name(c1,c2) (table)" title="Rename">ρ</button>
-          <button class="sym-btn sym-text" data-sym=" AND " data-tooltip="σ cond1 AND cond2 (table)" title="Logical AND">AND</button>
-          <button class="sym-btn sym-text" data-sym=" OR " data-tooltip="σ cond1 OR cond2 (table)" title="Logical OR">OR</button>
+          <button class="sym-btn" data-sym=" ∧ " data-tooltip="σ cond1 ∧ cond2 (table)" title="Logical AND">∧</button>
+          <button class="sym-btn" data-sym=" ∨ " data-tooltip="σ cond1 ∨ cond2 (table)" title="Logical OR">∨</button>
         </div>
       </div>
 
