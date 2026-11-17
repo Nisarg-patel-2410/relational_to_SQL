@@ -27,6 +27,9 @@ const nodePopup   = document.getElementById('node-popup');
 const popupLabel  = document.getElementById('popup-label');
 const popupRowCount = document.getElementById('popup-rowcount');
 const popupBody   = document.getElementById('popup-body');
+// The popup is position:fixed; keep it out of animated/transformed cards,
+// otherwise it is positioned relative to the card instead of the window.
+document.body.appendChild(nodePopup);
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -157,6 +160,9 @@ async function loadDatabases() {
 }
 
 dbSelect.addEventListener('change', () => {
+  resultSec.classList.add('hidden');
+  hideError();
+  lastQuery = '';
   loadTables();
   loadSchema();
 });
@@ -223,6 +229,7 @@ async function loadSchema() {
       return;
     }
     renderSchema(data.tables, sl);
+    renderER(data.tables);
   } catch(e) {
     sl.innerHTML = '<div class="loading-text">Failed to load</div>';
   }
@@ -243,7 +250,7 @@ function renderSchema(tables, sl) {
     // Table header row — click inserts table name
     const header = document.createElement('div');
     header.className = 'schema-table-name';
-    header.innerHTML = `${tbl.name} <span class="tbl-arrow">▶</span>`;
+    header.innerHTML = `${esc(tbl.name)} <span class="tbl-arrow">▶</span>`;
 
     header.addEventListener('click', (e) => {
       // Toggle columns
@@ -261,8 +268,8 @@ function renderSchema(tables, sl) {
       const item = document.createElement('div');
       item.className = 'schema-col-item';
       item.innerHTML =
-        `<span class="schema-col-name">${col.name}</span>` +
-        `<span class="schema-col-type">${col.type}</span>`;
+        `<span class="schema-col-name">${esc(col.name)}</span>` +
+        `<span class="schema-col-type">${esc(col.type)}</span>`;
       item.addEventListener('click', () => insertAtCursor(queryEl, col.name));
       cols.appendChild(item);
     });
@@ -328,7 +335,7 @@ form.addEventListener('submit', async ev => {
   hideError();
   resultSec.classList.add('hidden');
 
-  const raw = queryEl.value.trim();
+  let raw = queryEl.value.trim();
   if (!raw) {
     showError('Please enter a relational algebra expression.');
     return;
@@ -338,6 +345,22 @@ form.addEventListener('submit', async ev => {
 
   try {
     const dbName = dbSelect.value;
+
+    // SQL typed into the editor → translate it to relational algebra first
+    if (/^\s*\(?\s*select\b/i.test(raw)) {
+      const tr = await fetch('/sql-to-ra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-DB-Name': dbName },
+        body: JSON.stringify({ sql: raw })
+      });
+      const td = await tr.json();
+      if (td.error) throw new Error('This looks like SQL, but it could not be converted: ' + td.error);
+      if (sqlInput) sqlInput.value = raw;
+      raw = td.ra;
+      queryEl.value = raw;
+      showToast('SQL detected: converted to relational algebra');
+    }
+
     const resp = await fetch('/query', {
       method: 'POST',
       headers: {
@@ -366,6 +389,8 @@ form.addEventListener('submit', async ev => {
 
     // Show SQL
     sqlOut.textContent = data.sql;
+    const engOut = document.getElementById('sql-english');
+    if (engOut) engOut.textContent = data.explanation || '';
 
     // Show query title above results table
     if (queryTitle) queryTitle.textContent = '\u25b6 ' + raw;
@@ -377,6 +402,8 @@ form.addEventListener('submit', async ev => {
 
     // Fetch and render expression tree (non-blocking)
     fetchAndRenderTree(raw);
+    lastQuery = raw;
+    resetOptimizer();
 
   } catch (err) {
     showError(err.message);
@@ -443,10 +470,12 @@ async function fetchAndRenderTree(rawQuery) {
     });
     const data = await resp.json();
     if (data.error) {
-      treeContainer.innerHTML = `<div style="color:var(--error);font-size:.8rem;padding:8px">Tree error: ${data.error}</div>`;
+      treeContainer.innerHTML = `<div style="color:var(--error);font-size:.8rem;padding:8px">Tree error: ${esc(data.error)}</div>`;
       return;
     }
-    renderTree(data.tree);
+    const els = renderTree(data.tree);
+    setupStepper(data.tree, els);
+    if (treeCost) treeCost.textContent = data.totalCost != null ? 'est. cost ' + fmtNum(data.totalCost) : '';
   } catch (e) {
     treeContainer.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:8px">Could not load tree.</div>';
   }
@@ -466,10 +495,10 @@ function treeToLevels(root) {
 }
 
 // ── Render tree into #tree-container ─────────────────────────────────────
-function renderTree(root) {
-  if (!root) { treeContainer.innerHTML = ''; return; }
+function renderTree(root, container = treeContainer) {
+  if (!root) { container.innerHTML = ''; return new Map(); }
 
-  treeContainer.innerHTML = '';
+  container.innerHTML = '';
 
   // Wrapper — we'll insert an SVG overlay for lines
   const wrapper = document.createElement('div');
@@ -506,6 +535,13 @@ function renderTree(root) {
 
       box.appendChild(lbl);
       box.appendChild(rows);
+      if (node.estRows !== null && node.estRows !== undefined) {
+        const est = document.createElement('div');
+        est.className = 'tree-node-est';
+        est.textContent = 'est ' + fmtNum(node.estRows) + ' · cost ' + fmtNum(node.cost);
+        est.title = node.formula || '';
+        box.appendChild(est);
+      }
       el.appendChild(box);
       row.appendChild(el);
 
@@ -519,7 +555,7 @@ function renderTree(root) {
       // Click → show this node's result in Query Results panel
       box.addEventListener('click', () => {
         // Remove active from all boxes
-        document.querySelectorAll('.tree-node-box').forEach(b => b.classList.remove('node-active'));
+        container.querySelectorAll('.tree-node-box').forEach(b => b.classList.remove('node-active'));
         box.classList.add('node-active');
 
         // Show full result (up to all preview rows we have)
@@ -540,10 +576,11 @@ function renderTree(root) {
   });
 
   wrapper.appendChild(col);
-  treeContainer.appendChild(wrapper);
+  container.appendChild(wrapper);
 
   // Draw SVG connector lines after layout
   requestAnimationFrame(() => drawLines(root, nodeEls, wrapper));
+  return nodeEls;
 }
 
 // ── Draw dashed SVG lines between parent and child nodes ─────────────────
@@ -552,7 +589,7 @@ function drawLines(root, nodeEls, wrapper) {
   if (existing) existing.remove();
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.className = 'tree-svg';
+  svg.setAttribute('class', 'tree-svg');   // className is read-only on SVG elements
   const wRect = wrapper.getBoundingClientRect();
 
   function connect(parent, child) {
@@ -612,7 +649,7 @@ function showNodePopup(e, node) {
     tbl.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    node.preview.forEach(row => {
+    node.preview.slice(0, 5).forEach(row => {
       const tr = document.createElement('tr');
       row.forEach(cell => {
         const td = document.createElement('td');
@@ -624,10 +661,10 @@ function showNodePopup(e, node) {
     tbl.appendChild(tbody);
     popupBody.appendChild(tbl);
 
-    if (node.rowCount > node.preview.length) {
+    if (node.rowCount > Math.min(5, node.preview.length)) {
       const more = document.createElement('div');
       more.className = 'popup-more';
-      more.textContent = `… and ${node.rowCount - node.preview.length} more rows`;
+      more.textContent = `… and ${node.rowCount - Math.min(5, node.preview.length)} more rows`;
       popupBody.appendChild(more);
     }
   }
@@ -649,4 +686,373 @@ function positionPopup(e) {
 
 function hideNodePopup() {
   nodePopup.classList.add('hidden');
+}
+
+
+/* =========================================================
+   Step-through execution, optimizer, SQL → RA
+   ========================================================= */
+
+let lastQuery = '';
+const treeCost = document.getElementById('tree-cost');
+
+function esc(t) {
+  return String(t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function fmtNum(x) {
+  if (x === null || x === undefined) return '–';
+  if (x >= 100 || Number.isInteger(x)) return Math.round(x).toLocaleString();
+  return (Math.round(x * 10) / 10).toString();
+}
+
+function buildTable(rows, cols) {
+  const tbl = document.createElement('table');
+  tbl.className = 'mini-table';
+  const head = document.createElement('tr');
+  (cols || []).forEach(c => { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); });
+  const thead = document.createElement('thead'); thead.appendChild(head); tbl.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  (rows || []).forEach(r => {
+    const tr = document.createElement('tr');
+    r.forEach(v => { const td = document.createElement('td'); td.textContent = v === null ? 'NULL' : v; tr.appendChild(td); });
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  return tbl;
+}
+
+// ── Step-through execution ───────────────────────────────────────────────
+const stepBar     = document.getElementById('step-bar');
+const stepPanel   = document.getElementById('step-panel');
+const stepCounter = document.getElementById('step-counter');
+const stepPlayBtn = document.getElementById('step-play');
+let execSteps = [], stepIdx = -1, playTimer = null;
+
+const STEP_TEXT = [
+  ['π', 'Projection: keep only the listed columns and remove duplicate rows.'],
+  ['σ', 'Selection: keep only the rows where the condition is true.'],
+  ['×', 'Cross join: pair every row on the left with every row on the right.'],
+  ['⋈ (Natural', 'Natural join: combine rows that agree on all common columns.'],
+  ['⋈', 'Theta join: combine rows from both inputs where the join condition holds.'],
+  ['⟕', 'Left outer join: like a join, but every left row is kept (unmatched columns become NULL).'],
+  ['⟖', 'Right outer join: like a join, but every right row is kept (unmatched columns become NULL).'],
+  ['⟗', 'Full outer join: like a join, but unmatched rows from both sides are kept.'],
+  ['∪', 'Union: rows that are in either input (duplicates removed).'],
+  ['∩', 'Intersection: rows that are in both inputs.'],
+  ['−', 'Difference: rows of the left input that are not in the right input.'],
+  ['÷', 'Division: left values that are paired with every row of the right input.'],
+  ['ρ', 'Rename: give the relation (and optionally its columns) a new name.'],
+  ['γ', 'Grouping: form groups and compute an aggregate for each group.'],
+];
+
+function describeStep(node) {
+  if (!node.children || node.children.length === 0) return 'Scan: read every row of the base table.';
+  const hit = STEP_TEXT.find(([sym]) => node.label.startsWith(sym));
+  return hit ? hit[1] : '';
+}
+
+function postOrder(n, out = []) {
+  (n.children || []).forEach(ch => postOrder(ch, out));
+  out.push(n);
+  return out;
+}
+
+function setupStepper(root, els) {
+  stopPlay();
+  execSteps = postOrder(root).map(n => ({ node: n, el: els.get(n) }));
+  stepIdx = -1;
+  stepBar.classList.toggle('hidden', execSteps.length === 0);
+  stepPanel.classList.add('hidden');
+  updateStepCounter();
+}
+
+function updateStepCounter() {
+  stepCounter.textContent = stepIdx < 0 ? `${execSteps.length} steps` : `Step ${stepIdx + 1} / ${execSteps.length}`;
+}
+
+function goStep(i) {
+  if (!execSteps.length) return;
+  stepIdx = Math.max(0, Math.min(i, execSteps.length - 1));
+  execSteps.forEach((st, j) => {
+    const box = st.el && st.el.querySelector('.tree-node-box');
+    if (!box) return;
+    box.classList.toggle('node-done', j < stepIdx);
+    box.classList.toggle('node-active', j === stepIdx);
+  });
+  const { node } = execSteps[stepIdx];
+  const estLine = node.estRows !== null && node.estRows !== undefined
+    ? `<span class="metric">estimated <b>${fmtNum(node.estRows)}</b> <span class="formula">${esc(node.formula || '')}</span></span>`
+    : '';
+  stepPanel.innerHTML = `
+    <div class="step-head">
+      <span class="step-no">Step ${stepIdx + 1}</span>
+      <span class="step-label">${esc(node.label)}</span>
+    </div>
+    <p class="step-desc">${esc(describeStep(node))}</p>
+    <div class="step-metrics">
+      <span class="metric">actual <b>${node.rowCount}</b> row${node.rowCount === 1 ? '' : 's'}</span>
+      ${estLine}
+      ${node.cost != null ? `<span class="metric">cost so far <b>${fmtNum(node.cost)}</b></span>` : ''}
+    </div>
+    <pre class="sql-pre step-sql">${esc(node.sql || '')}</pre>`;
+  const wrap = document.createElement('div');
+  wrap.className = 'table-wrap step-table';
+  wrap.appendChild(buildTable(node.preview, node.columns));
+  if (node.rowCount > (node.preview || []).length) {
+    const more = document.createElement('div');
+    more.className = 'popup-more';
+    more.textContent = `showing ${node.preview.length} of ${node.rowCount} rows`;
+    wrap.appendChild(more);
+  }
+  stepPanel.appendChild(wrap);
+  stepPanel.classList.remove('hidden');
+  updateStepCounter();
+}
+
+function stopPlay() {
+  if (playTimer) clearInterval(playTimer);
+  playTimer = null;
+  if (stepPlayBtn) stepPlayBtn.textContent = '▶ Step through execution';
+}
+
+document.getElementById('step-next').addEventListener('click', () => { stopPlay(); goStep(stepIdx + 1); });
+document.getElementById('step-prev').addEventListener('click', () => { stopPlay(); goStep(stepIdx - 1); });
+document.getElementById('step-first').addEventListener('click', () => { stopPlay(); goStep(0); });
+stepPlayBtn.addEventListener('click', () => {
+  if (playTimer) { stopPlay(); return; }
+  if (stepIdx >= execSteps.length - 1) stepIdx = -1;
+  goStep(stepIdx + 1);
+  stepPlayBtn.textContent = '⏸ Pause';
+  playTimer = setInterval(() => {
+    if (stepIdx >= execSteps.length - 1) { stopPlay(); return; }
+    goStep(stepIdx + 1);
+  }, 1600);
+});
+
+// ── Optimizer ────────────────────────────────────────────────────────────
+const optBtn = document.getElementById('optimize-btn');
+const optOut = document.getElementById('opt-out');
+const optErr = document.getElementById('opt-error');
+
+function resetOptimizer() {
+  optOut.classList.add('hidden');
+  optErr.classList.add('hidden');
+}
+
+optBtn.addEventListener('click', async () => {
+  const query = lastQuery || queryEl.value.trim();
+  if (!query) { optErr.classList.remove('hidden'); document.getElementById('opt-error-text').textContent = 'Run a query first.'; return; }
+  optBtn.disabled = true;
+  optBtn.textContent = 'Optimizing…';
+  optErr.classList.add('hidden');
+  try {
+    const resp = await fetch('/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-DB-Name': dbSelect.value },
+      body: JSON.stringify({ query })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    renderOptimizer(data);
+  } catch (e) {
+    document.getElementById('opt-error-text').textContent = e.message;
+    optErr.classList.remove('hidden');
+  } finally {
+    optBtn.disabled = false;
+    optBtn.textContent = 'Optimize this query';
+  }
+});
+
+function renderOptimizer(d) {
+  const before = d.original.cost, after = d.optimized.cost;
+  const saved = before ? Math.max(0, (before - after) / before * 100) : 0;
+  const max = Math.max(before || 0, after || 0, 1);
+  document.getElementById('opt-summary').innerHTML = `
+    <div class="cost-row"><span class="cost-name">Original</span>
+      <div class="cost-track"><div class="cost-fill" style="width:${(before / max * 100).toFixed(1)}%"></div></div>
+      <span class="cost-val">${fmtNum(before)}</span></div>
+    <div class="cost-row"><span class="cost-name">Optimized</span>
+      <div class="cost-track"><div class="cost-fill good" style="width:${(after / max * 100).toFixed(1)}%"></div></div>
+      <span class="cost-val">${fmtNum(after)}</span></div>
+    <div class="opt-facts">
+      <span class="fact ${saved > 0 ? 'good' : ''}">${saved > 0 ? '▼ ' + saved.toFixed(1) + '% cheaper' : 'No cost change'}</span>
+      <span class="fact">${d.steps.length} rewrite${d.steps.length === 1 ? '' : 's'}</span>
+      <span class="fact ${d.resultsMatch ? 'good' : 'bad'}">${d.resultsMatch ? '✓ Same ' + d.rowCount + ' result rows' : '✗ Results differ'}</span>
+    </div>`;
+
+  const list = document.getElementById('opt-steps');
+  list.innerHTML = d.steps.length
+    ? d.steps.map(st => `<li><span class="rule-id">${esc(st.id)}</span> <b>${esc(st.rule)}</b>
+        <code class="rule-law">${esc(st.law)}</code><div class="rule-detail">${esc(st.detail)}</div></li>`).join('')
+    : '<li class="rule-none">No rule applies — this expression is already in its best form for these heuristics.</li>';
+
+  document.getElementById('opt-ra').textContent = d.optimized.ra;
+  document.getElementById('opt-cost-before').textContent = 'cost ' + fmtNum(before);
+  document.getElementById('opt-cost-after').textContent = 'cost ' + fmtNum(after);
+  document.getElementById('opt-sql-before').textContent = d.original.sql;
+  document.getElementById('opt-sql-after').textContent = d.optimized.sql;
+  optOut.classList.remove('hidden');
+  renderTree(d.original.tree, document.getElementById('opt-tree-before'));
+  renderTree(d.optimized.tree, document.getElementById('opt-tree-after'));
+}
+
+document.getElementById('opt-use').addEventListener('click', () => {
+  queryEl.value = document.getElementById('opt-ra').textContent;
+  form.requestSubmit();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// ── SQL → relational algebra ─────────────────────────────────────────────
+const sqlInput   = document.getElementById('sql-input');
+const sql2raBtn  = document.getElementById('sql2ra-btn');
+const sql2raOut  = document.getElementById('sql2ra-out');
+const sql2raErr  = document.getElementById('sql2ra-error');
+const sql2raLoad = document.getElementById('sql2ra-loading');
+
+sql2raBtn.addEventListener('click', async () => {
+  const sql = sqlInput.value.trim();
+  sql2raErr.classList.add('hidden');
+  sql2raOut.classList.add('hidden');
+  if (!sql) { document.getElementById('sql2ra-error-text').textContent = 'Paste a SQL query first.'; sql2raErr.classList.remove('hidden'); return; }
+  sql2raLoad.classList.remove('hidden');
+  try {
+    const resp = await fetch('/sql-to-ra', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-DB-Name': dbSelect.value },
+      body: JSON.stringify({ sql })
+    });
+    const d = await resp.json();
+    if (d.error) throw new Error(d.error);
+    document.getElementById('sql2ra-ra').textContent = d.ra;
+    document.getElementById('sql2ra-english').textContent = d.explanation || '';
+    document.getElementById('sql2ra-sql').textContent = d.generatedSql;
+    const rt = d.roundTrip || {};
+    const check = document.getElementById('sql2ra-check');
+    if (rt.error) {
+      check.className = 'check-badge warn';
+      check.textContent = 'Could not verify against the database: ' + rt.error;
+    } else if (rt.match) {
+      check.className = 'check-badge good';
+      check.textContent = `✓ Verified: the expression returns the same ${rt.raRows} row${rt.raRows === 1 ? '' : 's'} as your SQL`;
+    } else {
+      check.className = 'check-badge bad';
+      check.textContent = `✗ Results differ (SQL: ${rt.originalRows} rows, expression: ${rt.raRows} rows)`;
+    }
+    document.getElementById('sql2ra-warnings').innerHTML =
+      (d.warnings || []).map(w => `<li>${esc(w)}</li>`).join('');
+    sql2raOut.classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('sql2ra-error-text').textContent = e.message;
+    sql2raErr.classList.remove('hidden');
+  } finally {
+    sql2raLoad.classList.add('hidden');
+  }
+});
+
+document.getElementById('sql2ra-use').addEventListener('click', () => {
+  queryEl.value = document.getElementById('sql2ra-ra').textContent;
+  form.requestSubmit();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+
+// ── Theme (light / dark) ─────────────────────────────────────────────────
+const themeBtn = document.getElementById('theme-toggle');
+
+function currentTheme() {
+  const set = document.documentElement.dataset.theme;
+  if (set) return set;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function syncThemeButton() {
+  if (themeBtn) themeBtn.textContent = currentTheme() === 'dark' ? '☀' : '☾';
+}
+
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('ra-theme', next); } catch (e) {}
+    syncThemeButton();
+    if (lastSchema) renderER(lastSchema);
+  });
+  syncThemeButton();
+}
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    syncThemeButton();
+    if (lastSchema && !document.documentElement.dataset.theme) renderER(lastSchema);
+  });
+}
+
+// ── ER diagram drawn from the live schema ────────────────────────────────
+let lastSchema = null;
+let erCounter = 0;
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function erName(s) {
+  return String(s).replace(/[^A-Za-z0-9_]/g, '_') || 'x';
+}
+
+function erText(tables) {
+  const lines = ['erDiagram'];
+  tables.forEach(t => {
+    lines.push(`  ${erName(t.name)} {`);
+    t.columns.forEach(c => {
+      const type = erName((c.type || 'TEXT').split('(')[0]);
+      const keys = [];
+      if (c.pk) keys.push('PK');
+      if ((t.foreignKeys || []).some(fk => fk.from === c.name)) keys.push('FK');
+      lines.push(`    ${type} ${erName(c.name)}${keys.length ? ' ' + keys.join(',') : ''}`);
+    });
+    lines.push('  }');
+  });
+  tables.forEach(t => (t.foreignKeys || []).forEach(fk => {
+    lines.push(`  ${erName(fk.table)} ||--o{ ${erName(t.name)} : "${erName(fk.from)}"`);
+  }));
+  return lines.join('\n');
+}
+
+async function renderER(tables) {
+  lastSchema = tables;
+  const box = document.getElementById('er-diagram');
+  if (!box) return;
+  if (typeof mermaid === 'undefined') {
+    box.innerHTML = '<div class="loading-text">Diagram library could not load (offline?).</div>';
+    return;
+  }
+  if (!tables || !tables.length) {
+    box.innerHTML = '<div class="loading-text">No tables to draw.</div>';
+    return;
+  }
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    securityLevel: 'strict',
+    fontFamily: 'IBM Plex Mono, monospace',
+    themeVariables: {
+      background: cssVar('--sheet'),
+      primaryColor: cssVar('--card'),
+      primaryTextColor: cssVar('--ink'),
+      primaryBorderColor: cssVar('--ink-soft'),
+      secondaryColor: cssVar('--wash'),
+      tertiaryColor: cssVar('--sheet'),
+      lineColor: cssVar('--accent'),
+      textColor: cssVar('--ink'),
+      attributeBackgroundColorOdd: cssVar('--sheet'),
+      attributeBackgroundColorEven: cssVar('--wash'),
+      fontSize: '13px',
+    },
+  });
+  try {
+    const { svg } = await mermaid.render('er-svg-' + (++erCounter), erText(tables));
+    box.innerHTML = svg;
+  } catch (e) {
+    box.innerHTML = '<div class="loading-text">Could not draw this schema.</div>';
+  }
 }

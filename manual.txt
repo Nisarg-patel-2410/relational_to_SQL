@@ -47,6 +47,30 @@ You can use the built-in symbol buttons on the website to insert standard relati
   Syntax B (rename columns):   ρ new_table(col1, col2) (query)
   Example: ρ prof_info(staff_id, full_name, role) (professor)
 
+• Theta Join (⋈[cond]): Join on any condition. Write the condition in [ ] or { }.
+  Syntax: table1 ⋈[table1.a = table2.b] table2
+  Example: Owners ⋈[Owners.OID = Owns.OID] Owns
+
+• Outer Joins (⟕ left, ⟖ right, ⟗ full): Keep unmatched rows (filled with NULL).
+  Natural:   table1 ⟕ table2
+  On a condition: table1 ⟕[table1.a = table2.b] table2
+  Example: π OName (σ PetID IS NULL (Owners ⟕ Owns))   -- owners with no pets
+
+• Nesting: Any operator can be applied to the result of any other, e.g.
+  π OID, City (Owns ⨝ π PetID, City (Pets)) ÷ π City (Pets)
+  Qualified names (Owners.OID) still work after π / σ on that table.
+  Conditions may use parentheses, ∧ ∨ ¬, ≠ ≥ ≤, IS NULL, LIKE, IN, BETWEEN:
+  σ (Species='Dog' ∨ Species='Cat') ∧ City='Indore' (Pets)
+
+A sample database for these is created by:  python seed_pets_db.py  (user_dbs/pets.db)
+
+• Grouping / Aggregation (γ): GROUP BY with aggregate functions.
+  Syntax: γ group_cols; AGG(col)→name, ... (query)
+  Example: γ dept_id; COUNT(*)→n, AVG(marks)→avg (result)
+  No ';' needed when it's unambiguous: γ City, COUNT(*)→n (Pets)
+  Filter groups (HAVING) with σ on top: σ n > 1 (γ City; COUNT(*)→n (Pets))
+  Aggregates: COUNT, SUM, AVG, MIN, MAX (COUNT(DISTINCT x) also works)
+
 --------------------------------------------------------------------------------
 2. GENERAL RULES FOR WRITING EXPRESSIONS
 --------------------------------------------------------------------------------
@@ -72,5 +96,29 @@ Uploading Custom Databases:
 --------------------------------------------------------------------------------
 - Syntax Suggestions: Hover your mouse over any symbol in the "Symbols" card to see its required syntax structure in a tooltip.
 - ER Diagram Viewer: The active default Database Schema is visible on the bottom left. Click anywhere on the diagram to expand it into full-screen view.
+
+--------------------------------------------------------------------------------
+5. QUERY OPTIMIZER, COST ESTIMATOR & STEP-THROUGH
+--------------------------------------------------------------------------------
+- Optimize this query: rewrites the expression with relational algebra
+  equivalence rules and shows which rule fired where:
+    R1 cascade of σ, R2 σ/π commute, R3 push σ below joins, R4 σ over × → ⋈θ,
+    R5 merge σ into ⋈θ, R6 push σ into ∪ ∩ −, R7 push σ below γ,
+    R8 cascade of π, R9 combine σ.
+  Both plans are run and the tool confirms they return the same rows.
+- Cost estimator: every tree node shows "est N · cost C", using the textbook
+  model with n(R) and V(A,R) read from the database (hover for the formula).
+  Cost = tuples processed (scans + inputs/outputs of joins, set ops, γ).
+- Step through execution: runs the plan bottom-up one operator at a time,
+  showing each intermediate table, its SQL, actual vs estimated rows.
+
+--------------------------------------------------------------------------------
+6. SQL → RELATIONAL ALGEBRA
+--------------------------------------------------------------------------------
+Paste a SELECT query into the "SQL → Relational Algebra" card. Supported:
+SELECT / DISTINCT, FROM with aliases, comma joins, [INNER|NATURAL|CROSS] JOIN,
+LEFT/RIGHT/FULL OUTER JOIN, subqueries in FROM, WHERE, GROUP BY, HAVING,
+UNION / INTERSECT / EXCEPT. The result is verified by running both versions.
+Subqueries inside WHERE (IN / EXISTS) must be rewritten as joins first.
 
 ================================================================================

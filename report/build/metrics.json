@@ -1,0 +1,255 @@
+{
+ "optimizer": [
+  {
+   "name": "Q1",
+   "db": "database.db",
+   "ra": "π name, subject_name, marks (σ students.student_id = result.student_id ∧ result.subject_id = subject.subject_id ∧ marks >= 90 (students × result × subject))",
+   "opt": "π name, subject_name, marks (students ⋈[students.student_id = result.student_id] σ marks >= 90 (result) ⋈[result.subject_id = subject.subject_id] subject)",
+   "c1": 1084.0,
+   "c2": 65.3,
+   "saving": 94.0,
+   "rules": [
+    "R1",
+    "R3",
+    "R3",
+    "R4",
+    "R3",
+    "R4"
+   ],
+   "match": true,
+   "rows": 4
+  },
+  {
+   "name": "Q2",
+   "db": "database.db",
+   "ra": "π name, dept_name (σ students.dept_id = department.dept_id ∧ gender='Female' (students × department))",
+   "opt": "π name, dept_name (σ gender='Female' (students) ⋈[students.dept_id = department.dept_id] department)",
+   "c1": 46.0,
+   "c2": 22.0,
+   "saving": 52.2,
+   "rules": [
+    "R1",
+    "R3",
+    "R4"
+   ],
+   "match": true,
+   "rows": 4
+  },
+  {
+   "name": "Q3",
+   "db": "database.db",
+   "ra": "π students.name, subject.subject_name (σ grade='A' (students ⋈ result ⋈ subject))",
+   "opt": "π students.name, subject.subject_name (students ⋈ σ grade='A' (result) ⋈ subject)",
+   "c1": 97.3,
+   "c2": 57.3,
+   "saving": 41.1,
+   "rules": [
+    "R3",
+    "R3"
+   ],
+   "match": true,
+   "rows": 8
+  },
+  {
+   "name": "Q4",
+   "db": "pets.db",
+   "ra": "π OName (σ Species='Dog' ∧ OName<>'Ravi' (Owners ⨝ Owns ⨝ Pets))",
+   "opt": "π OName (σ OName<>'Ravi' (Owners) ⋈ Owns ⋈ σ Species='Dog' (Pets))",
+   "c1": 44.0,
+   "c2": 37.9,
+   "saving": 13.9,
+   "rules": [
+    "R1",
+    "R3",
+    "R3",
+    "R3"
+   ],
+   "match": true,
+   "rows": 2
+  },
+  {
+   "name": "Q5",
+   "db": "pets.db",
+   "ra": "σ City='Bhopal' (π City (Owners) ∪ π City (Pets))",
+   "opt": "π City (σ City='Bhopal' (Owners)) ∪ π City (σ City='Bhopal' (Pets))",
+   "c1": 21.0,
+   "c2": 13.0,
+   "saving": 38.1,
+   "rules": [
+    "R6",
+    "R2",
+    "R2"
+   ],
+   "match": true,
+   "rows": 1
+  },
+  {
+   "name": "Q6",
+   "db": "pets.db",
+   "ra": "σ City='Indore' (γ City; COUNT(*)→n (Pets))",
+   "opt": "γ City; COUNT(*)→n (σ City='Indore' (Pets))",
+   "c1": 13.0,
+   "c2": 7.7,
+   "saving": 41.0,
+   "rules": [
+    "R7"
+   ],
+   "match": true,
+   "rows": 1
+  }
+ ],
+ "estimates": [
+  {
+   "q": "π students.name, subject.subject_name (σ grade='A' (students ⋈ result ⋈ subject))",
+   "est": 1.3,
+   "actual": 8
+  },
+  {
+   "q": "γ dept_id; COUNT(*)→n (students)",
+   "est": 3,
+   "actual": 3
+  },
+  {
+   "q": "σ gender='Female' (students)",
+   "est": 4.0,
+   "actual": 4
+  },
+  {
+   "q": "students ⋈ result",
+   "est": 16.0,
+   "actual": 16
+  },
+  {
+   "q": "Owns ⨝ Pets",
+   "est": 6.0,
+   "actual": 6
+  },
+  {
+   "q": "σ Species='Dog' (Pets)",
+   "est": 1.2,
+   "actual": 2
+  }
+ ],
+ "timing": [
+  {
+   "label": "Projection",
+   "convert": 0.04,
+   "optimize": 0.01,
+   "cost": 1.62
+  },
+  {
+   "label": "3-way join + σ",
+   "convert": 0.09,
+   "optimize": 2.39,
+   "cost": 3.88
+  },
+  {
+   "label": "Division",
+   "convert": 1.27,
+   "optimize": 0.04,
+   "cost": 2.53
+  },
+  {
+   "label": "γ aggregation",
+   "convert": 0.05,
+   "optimize": 0.01,
+   "cost": 1.16
+  },
+  {
+   "label": "SQL → RA: SELECT s.name, d.dept_name F…",
+   "convert": 0.08,
+   "optimize": null,
+   "cost": null
+  },
+  {
+   "label": "SQL → RA: SELECT dept_id, COUNT(*) AS …",
+   "convert": 0.07,
+   "optimize": null,
+   "cost": null
+  }
+ ],
+ "sql2ra": [
+  {
+   "sql": "SELECT s.name, d.dept_name FROM students s JOIN department d ON s.dept_id = d.dept_id WHERE s.gender = 'Female'",
+   "ra": "π s.name, d.dept_name (σ s.gender = 'Female' (ρ s (students) ⋈[s.dept_id = d.dept_id] ρ d (department)))",
+   "match": true
+  },
+  {
+   "sql": "SELECT dept_id, COUNT(*) AS n FROM students GROUP BY dept_id HAVING COUNT(*) > 1",
+   "ra": "σ n > 1 (γ dept_id; COUNT(*)→n (students))",
+   "match": true
+  },
+  {
+   "sql": "SELECT s.name FROM students s LEFT JOIN mentor m ON s.student_id = m.student_id WHERE m.mentor_id IS NULL",
+   "ra": "π s.name (σ m.mentor_id IS NULL (ρ s (students) ⟕[s.student_id = m.student_id] ρ m (mentor)))",
+   "match": true
+  },
+  {
+   "sql": "SELECT name FROM students INTERSECT SELECT name FROM professor",
+   "ra": "π name (students) ∩ π name (professor)",
+   "match": true
+  },
+  {
+   "sql": "SELECT o.OName, p.PName FROM Owners o, Owns w, Pets p WHERE o.OID = w.OID AND w.PetID = p.PetID AND p.Species = 'Dog'",
+   "ra": "π o.OName, p.PName (σ o.OID = w.OID ∧ w.PetID = p.PetID ∧ p.Species = 'Dog' (ρ o (Owners) × ρ w (Owns) × ρ p (Pets)))",
+   "match": true
+  }
+ ],
+ "translations": [
+  {
+   "ra": "π name, email (professor)",
+   "sql": "SELECT DISTINCT name, email FROM professor",
+   "en": "Show the name and email of professor."
+  },
+  {
+   "ra": "σ gender='Female' ∧ dept_id=1 (students)",
+   "sql": "SELECT * FROM students WHERE gender='Female' AND dept_id=1",
+   "en": "Show students where gender is 'Female' and dept_id is 1."
+  },
+  {
+   "ra": "π name (σ mentor.student_id IS NULL (students ⟕[students.student_id = mentor.student_id] mentor))",
+   "sql": "SELECT DISTINCT name FROM students LEFT JOIN mentor ON students.student_id = mentor.student_id WHERE mentor.student_id IS NULL",
+   "en": "Show the name of students left-outer-joined with mentor where students.student_id is mentor.student_id, keeping every row of students even without a match (missing values are empty) where mentor.student_id IS NULL."
+  },
+  {
+   "ra": "γ dept_id; COUNT(*)→n (students)",
+   "sql": "SELECT dept_id, COUNT(*) AS n FROM students GROUP BY dept_id",
+   "en": "Show the dept_id and number of rows (as n) for each dept_id group of students."
+  },
+  {
+   "ra": "π OID, City (Owns ⨝ π PetID, City (Pets)) ÷ π City (Pets)",
+   "sql": "SELECT DISTINCT L1.\"OID\"\nFROM (SELECT DISTINCT OID, City FROM Owns NATURAL JOIN (SELECT DISTINCT PetID, City FROM Pets) AS Pets) AS L1\nWHERE NOT EXISTS (\n    SELECT R.\"City\" FROM (SELECT DISTINCT City FROM Pets) AS R\n    EXCEPT\n    SELECT L2.\"City\" FROM (SELECT DISTINCT OID, City FROM Owns NATURAL JOIN (SELECT DISTINCT PetID, City FROM Pets) AS Pets) AS L2 WHERE L2.\"OID\" = L1.\"OID\"\n)",
+   "en": "Show the values in the OID and City of Owns combined with the PetID and City of Pets on their matching common columns that are paired with every row of the City of Pets."
+  }
+ ],
+ "tests": {
+  "test_complex.py": {
+   "code": 0,
+   "last": "16/16 passed",
+   "checks": 16
+  },
+  "test_features.py": {
+   "code": 0,
+   "last": "34/34 passed",
+   "checks": 34
+  },
+  "test_api.py": {
+   "code": 0,
+   "last": "ALL GOOD",
+   "checks": 203
+  }
+ },
+ "loc": {
+  "converter.py": 912,
+  "optimizer.py": 235,
+  "cost.py": 276,
+  "sql_to_ra.py": 396,
+  "explainer.py": 136,
+  "conditions.py": 100,
+  "ra_printer.py": 68,
+  "app.py": 339,
+  "static/script.js": 1058,
+  "static/style.css": 733,
+  "static/index.html": 321
+ }
+}

@@ -1,0 +1,176 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Report diagrams</title>
+<style>
+  body { margin: 0; background: #fff; font-family: "Segoe UI", Arial, sans-serif; color: #221d17; }
+  .d { width: 1200px; padding: 24px; box-sizing: border-box; background: #fff; }
+  svg text { font-family: "Segoe UI", Arial, sans-serif; }
+  .mono { font-family: Consolas, "Courier New", monospace; }
+</style></head>
+<body>
+
+<!-- 1. System architecture -->
+<div class="d" id="arch">
+<svg viewBox="0 0 1152 640" width="1152" height="640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a5045"/></marker>
+  </defs>
+  <!-- tier labels -->
+  <text x="20" y="40" font-size="15" font-weight="700" fill="#b8532f" letter-spacing="2">PRESENTATION</text>
+  <text x="20" y="232" font-size="15" font-weight="700" fill="#b8532f" letter-spacing="2">APPLICATION (Flask)</text>
+  <text x="20" y="560" font-size="15" font-weight="700" fill="#b8532f" letter-spacing="2">DATA</text>
+
+  <!-- browser -->
+  <rect x="20" y="56" width="1112" height="120" rx="10" fill="#fbf7ef" stroke="#cfc3ae" stroke-width="1.5"/>
+  <text x="40" y="84" font-size="18" font-weight="700">Web interface — index.html · script.js · style.css</text>
+  <g font-size="14">
+    <rect x="40" y="100" width="160" height="56" rx="8" fill="#fff" stroke="#5a5045"/><text x="120" y="124" text-anchor="middle">Expression editor</text><text x="120" y="143" text-anchor="middle" fill="#5a5045">RA or SQL input</text>
+    <rect x="215" y="100" width="160" height="56" rx="8" fill="#fff" stroke="#5a5045"/><text x="295" y="124" text-anchor="middle">SQL + English</text><text x="295" y="143" text-anchor="middle" fill="#5a5045">output panel</text>
+    <rect x="390" y="100" width="160" height="56" rx="8" fill="#fff" stroke="#5a5045"/><text x="470" y="124" text-anchor="middle">Expression tree</text><text x="470" y="143" text-anchor="middle" fill="#5a5045">+ step-through</text>
+    <rect x="565" y="100" width="160" height="56" rx="8" fill="#fff" stroke="#5a5045"/><text x="645" y="124" text-anchor="middle">Optimizer view</text><text x="645" y="143" text-anchor="middle" fill="#5a5045">plans + cost bars</text>
+    <rect x="740" y="100" width="160" height="56" rx="8" fill="#fff" stroke="#5a5045"/><text x="820" y="124" text-anchor="middle">SQL → RA card</text><text x="820" y="143" text-anchor="middle" fill="#5a5045">round-trip check</text>
+    <rect x="915" y="100" width="197" height="56" rx="8" fill="#fff" stroke="#5a5045"/><text x="1013" y="124" text-anchor="middle">Schema + ER diagram</text><text x="1013" y="143" text-anchor="middle" fill="#5a5045">Mermaid, live schema</text>
+  </g>
+
+  <!-- HTTP arrow -->
+  <line x1="576" y1="176" x2="576" y2="244" stroke="#5a5045" stroke-width="2" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text x="590" y="214" font-size="13" fill="#5a5045" class="mono">JSON over HTTP · X-DB-Name header</text>
+
+  <!-- API -->
+  <rect x="20" y="248" width="1112" height="70" rx="10" fill="#fff" stroke="#b8532f" stroke-width="1.8"/>
+  <text x="40" y="276" font-size="17" font-weight="700">app.py — REST API</text>
+  <text x="40" y="302" font-size="14" class="mono" fill="#2d5577">/query   /query-tree   /optimize   /sql-to-ra   /schema   /tables   /databases   /upload-db</text>
+  <text x="900" y="276" font-size="13" fill="#5a5045">input validation · uniform</text>
+  <text x="900" y="296" font-size="13" fill="#5a5045">JSON errors · read-only DB</text>
+
+  <!-- modules -->
+  <g font-size="14">
+    <rect x="20" y="350" width="250" height="150" rx="10" fill="#f6f0e4" stroke="#5a5045"/>
+    <text x="36" y="376" font-weight="700" font-size="15">converter.py</text>
+    <text x="36" y="400">Tokenizer → ExpressionTreeBuilder</text>
+    <text x="36" y="422">AST node classes (π σ × ⋈ ⋈θ</text>
+    <text x="36" y="442">⟕ ⟖ ⟗ ∪ ∩ − ÷ ρ γ)</text>
+    <text x="36" y="466">SQLConverter (compositional</text>
+    <text x="36" y="486">SQL with nested subqueries)</text>
+
+    <rect x="290" y="350" width="200" height="150" rx="10" fill="#f6f0e4" stroke="#5a5045"/>
+    <text x="306" y="376" font-weight="700" font-size="15">optimizer.py</text>
+    <text x="306" y="400">9 equivalence rules</text>
+    <text x="306" y="422">R1–R9: push σ down,</text>
+    <text x="306" y="442">σ over × → ⋈θ,</text>
+    <text x="306" y="462">merge π / σ</text>
+    <text x="306" y="486">rewrite log per step</text>
+
+    <rect x="510" y="350" width="200" height="150" rx="10" fill="#f6f0e4" stroke="#5a5045"/>
+    <text x="526" y="376" font-weight="700" font-size="15">cost.py</text>
+    <text x="526" y="400">n(R), V(A,R) statistics</text>
+    <text x="526" y="422">selectivity estimates</text>
+    <text x="526" y="442">per-node row estimate</text>
+    <text x="526" y="462">pipelined cost model</text>
+    <text x="526" y="486">formula per node</text>
+
+    <rect x="730" y="350" width="190" height="150" rx="10" fill="#f6f0e4" stroke="#5a5045"/>
+    <text x="746" y="376" font-weight="700" font-size="15">sql_to_ra.py</text>
+    <text x="746" y="400">SQL tokenizer + parser</text>
+    <text x="746" y="422">JOIN / WHERE / GROUP BY</text>
+    <text x="746" y="442">HAVING / UNION … → AST</text>
+    <text x="746" y="466">ra_printer.py</text>
+    <text x="746" y="486">AST → RA text</text>
+
+    <rect x="940" y="350" width="192" height="150" rx="10" fill="#f6f0e4" stroke="#5a5045"/>
+    <text x="956" y="376" font-weight="700" font-size="15">explainer.py</text>
+    <text x="956" y="400">AST → plain English</text>
+    <text x="956" y="430" font-weight="700" font-size="15">conditions.py</text>
+    <text x="956" y="454">split ∧ / ∨, find</text>
+    <text x="956" y="474">attributes in conditions</text>
+  </g>
+  <g stroke="#5a5045" stroke-width="1.6" marker-end="url(#ar)">
+    <line x1="145" y1="318" x2="145" y2="346"/><line x1="390" y1="318" x2="390" y2="346"/>
+    <line x1="610" y1="318" x2="610" y2="346"/><line x1="825" y1="318" x2="825" y2="346"/>
+    <line x1="1036" y1="318" x2="1036" y2="346"/>
+  </g>
+
+  <!-- data -->
+  <line x1="576" y1="500" x2="576" y2="568" stroke="#5a5045" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="590" y="540" font-size="13" fill="#5a5045" class="mono">sqlite3 (mode=ro) · PRAGMA table_info / foreign_key_list</text>
+  <rect x="300" y="572" width="552" height="56" rx="28" fill="#eef3ec" stroke="#4f7a55" stroke-width="1.6"/>
+  <text x="576" y="606" font-size="16" text-anchor="middle">SQLite: database.db (University, 7 tables) · user_dbs/*.db (uploads)</text>
+</svg>
+</div>
+
+<!-- 2. Translation pipeline -->
+<div class="d" id="pipeline">
+<svg viewBox="0 0 1152 330" width="1152" height="330" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5a5045"/></marker></defs>
+  <g font-size="15">
+    <rect x="10" y="30" width="190" height="96" rx="10" fill="#fbf7ef" stroke="#5a5045"/>
+    <text x="105" y="62" text-anchor="middle" font-weight="700">1. Input</text>
+    <text x="105" y="88" text-anchor="middle" class="mono" font-size="13">π name (σ dept_id=1</text>
+    <text x="105" y="106" text-anchor="middle" class="mono" font-size="13">(students))</text>
+
+    <rect x="240" y="30" width="190" height="96" rx="10" fill="#fbf7ef" stroke="#5a5045"/>
+    <text x="335" y="62" text-anchor="middle" font-weight="700">2. Tokenize</text>
+    <text x="335" y="88" text-anchor="middle" font-size="13">PROJECT · IDENT ·</text>
+    <text x="335" y="106" text-anchor="middle" font-size="13">SELECT · CONDITION · ( )</text>
+
+    <rect x="470" y="30" width="190" height="96" rx="10" fill="#fbf7ef" stroke="#5a5045"/>
+    <text x="565" y="62" text-anchor="middle" font-weight="700">3. Parse → AST</text>
+    <text x="565" y="88" text-anchor="middle" font-size="13">recursive descent,</text>
+    <text x="565" y="106" text-anchor="middle" font-size="13">3 precedence levels</text>
+
+    <rect x="700" y="30" width="200" height="96" rx="10" fill="#fff4ee" stroke="#b8532f" stroke-width="1.8"/>
+    <text x="800" y="62" text-anchor="middle" font-weight="700">4. Optimize (optional)</text>
+    <text x="800" y="88" text-anchor="middle" font-size="13">rules R1–R9 +</text>
+    <text x="800" y="106" text-anchor="middle" font-size="13">cost estimate</text>
+
+    <rect x="940" y="30" width="200" height="96" rx="10" fill="#fbf7ef" stroke="#5a5045"/>
+    <text x="1040" y="62" text-anchor="middle" font-weight="700">5. Generate SQL</text>
+    <text x="1040" y="88" text-anchor="middle" font-size="13">bottom-up, subquery</text>
+    <text x="1040" y="106" text-anchor="middle" font-size="13">aliases per node</text>
+  </g>
+  <g stroke="#5a5045" stroke-width="2" marker-end="url(#a2)">
+    <line x1="200" y1="78" x2="236" y2="78"/><line x1="430" y1="78" x2="466" y2="78"/>
+    <line x1="660" y1="78" x2="696" y2="78"/><line x1="900" y1="78" x2="936" y2="78"/>
+    <line x1="1040" y1="126" x2="1040" y2="176"/>
+  </g>
+  <g font-size="15">
+    <rect x="700" y="180" width="440" height="110" rx="10" fill="#eef3ec" stroke="#4f7a55"/>
+    <text x="920" y="210" text-anchor="middle" font-weight="700">6. Execute read-only on SQLite + present</text>
+    <text x="920" y="236" text-anchor="middle" font-size="13" class="mono">SELECT DISTINCT name FROM students WHERE dept_id=1</text>
+    <text x="920" y="262" text-anchor="middle" font-size="13">rows · tree with est/actual counts · English sentence</text>
+    <rect x="10" y="180" width="650" height="110" rx="10" fill="#fff" stroke="#cfc3ae" stroke-dasharray="6 4"/>
+    <text x="30" y="210" font-weight="700">Reverse direction (SQL → RA)</text>
+    <text x="30" y="238" font-size="13">SQL tokens → SQLToRA parser → same AST classes → ra_printer → RA text</text>
+    <text x="30" y="262" font-size="13">The AST is turned back into SQL and both queries are run: identical rows = verified.</text>
+  </g>
+  <line x1="660" y1="235" x2="696" y2="235" stroke="#5a5045" stroke-width="2" marker-end="url(#a2)"/>
+</svg>
+</div>
+
+<!-- 3. Cost chart -->
+<div class="d" id="costchart">
+<svg viewBox="0 0 1152 470" width="1152" height="470" xmlns="http://www.w3.org/2000/svg" id="cc"></svg>
+</div>
+
+<script>
+const data = __DATA__;
+const svg = document.getElementById('cc'), NS = 'http://www.w3.org/2000/svg';
+function el(t, a, txt) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; }
+const left = 220, right = 1100, y0 = 50, rowH = 58;
+el('text', {x: left, y: 26, 'font-size': 16, 'font-weight': 700}, 'Estimated cost (tuples processed) — original vs optimized plan, log scale');
+const max = Math.log10(Math.max(...data.map(d => d.c1)) * 1.2);
+const sx = v => left + (Math.log10(Math.max(v, 1)) / max) * (right - left - 90);
+data.forEach((d, i) => {
+  const y = y0 + i * rowH;
+  el('text', {x: 20, y: y + 24, 'font-size': 15, 'font-weight': 700}, d.name);
+  el('text', {x: 60, y: y + 24, 'font-size': 13, fill: '#5a5045'}, d.label);
+  el('rect', {x: left, y: y + 6, width: sx(d.c1) - left, height: 18, rx: 4, fill: '#b8532f'});
+  el('text', {x: sx(d.c1) + 8, y: y + 20, 'font-size': 13}, d.c1.toLocaleString());
+  el('rect', {x: left, y: y + 28, width: sx(d.c2) - left, height: 18, rx: 4, fill: '#4f7a55'});
+  el('text', {x: sx(d.c2) + 8, y: y + 42, 'font-size': 13}, d.c2 + '   (−' + d.saving + '%)');
+});
+const ly = y0 + data.length * rowH + 14;
+el('rect', {x: left, y: ly, width: 14, height: 14, fill: '#b8532f'}); el('text', {x: left + 22, y: ly + 12, 'font-size': 13}, 'original plan');
+el('rect', {x: left + 160, y: ly, width: 14, height: 14, fill: '#4f7a55'}); el('text', {x: left + 182, y: ly + 12, 'font-size': 13}, 'optimized plan (identical result rows in every case)');
+</script>
+</body></html>
